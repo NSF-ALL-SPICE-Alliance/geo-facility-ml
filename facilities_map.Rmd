@@ -12,6 +12,8 @@ library(readxl)
 library(here)
 library(tidygeocoder)
 library(mapview)
+library(shiny)
+library(leaflet)
 ```
 
 Read in Data
@@ -66,3 +68,76 @@ Use chatgpt to recode abbreviation into the full name
 
 Can we make a leaflet map that you can filter by service offered 
 - pivot_wider?
+
+# Services offered bool seperation 
+
+```{r}
+service_list <- strsplit(as.character(geocoded_facilities_filtered$service_code_info), " \\* | ")
+service_list
+
+all_services <- unique(unlist(service_list))
+all_services
+```
+
+```{r}
+binary_service <- data.frame(matrix(FALSE, nrow = nrow(geocoded_facilities_filtered), ncol = length(all_services)))
+colnames(binary_service) <- all_services
+```
+
+```{r}
+for (i in 1:nrow(geocoded_facilities_filtered)) {
+  services_offered <- unlist(service_list[i])
+  binary_service[i, services_offered] <- TRUE
+}
+
+services_facilities <- cbind(geocoded_facilities_filtered, binary_service)
+services_facilities
+```
+
+```{r}
+services_facilities <- subset(services_facilities, select = -c(service_code_info))
+services_facilities
+```
+
+```{r}
+ui <- fluidPage(
+  titlePanel("Mental Health Facilities Map"),
+  leafletOutput("map"),
+  checkboxGroupInput("services", label = "Filter by Service:", choices = colnames(services_facilities)[12:ncol(services_facilities)], selected = character(0))
+)
+
+
+server <- function(input, output, session) {
+
+  output$map <- renderLeaflet({
+    leaflet() %>%
+      addTiles() %>%
+      addMarkers(data = services_facilities, ~longitude, ~latitude, popup = ~name1,
+                 icon = leaflet::makeIcon(  
+        iconUrl = "https://leafletjs.com/examples/custom-icons/leaf-green.png",     # icon edit not doing anything, maybe getting 
+        iconWidth = 10,                                                             # rid of shadow would speed things up
+        iconHeight = 60)
+    )
+  })
+  
+
+  observe({
+    filtered_data <- services_facilities
+    
+    selected_services <- input$services
+    
+    for (service in colnames(services_facilities)[12:ncol(services_facilities)]) {
+      if (service %in% selected_services) {
+        filtered_data <- filtered_data[filtered_data[[service]], ]
+      }
+    }
+    
+    leafletProxy("map") %>%
+      clearMarkers() %>%
+      addMarkers(data = filtered_data, ~longitude, ~latitude, popup = ~name1)
+  })
+}
+
+
+shinyApp(ui = ui, server = server)
+```
