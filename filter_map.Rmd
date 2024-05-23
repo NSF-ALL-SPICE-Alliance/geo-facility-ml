@@ -14,6 +14,7 @@ library(tidygeocoder)
 library(mapview)
 library(shiny)
 library(leaflet)
+library(dplyr)
 ```
 
 Read in Data
@@ -115,48 +116,32 @@ ui <- fluidPage(
 
 # Server
 server <- function(input, output, session) {
-  
+
   # Observe changes in overall_category and update service choices dynamically
   observeEvent(input$overall_category, {
     req(input$overall_category)
     updateSelectInput(session, "service", choices = abbrev_dict[[input$overall_category]])
   })
-  
- # Reactive expression to filter data based on selected category and service
-# Reactive expression to filter data based on selected category and service
-filtered_data <- reactive({
-  req(input$overall_category, input$service)
-  
-  # Print selected category and service
-  cat("Selected Category:", input$overall_category, "\n")
-  cat("Selected Service:", input$service, "\n")
-  
-  # Split the service_code_info into individual services
-  services <- strsplit(geocoded_facilities_filtered$service_code_info, " \\* ")
-  
-  # Print the split services
-  cat("Split Services:")
-  #print(services)
-  
-  # Check if any service contains the selected category and service
-  filtered <- geocoded_facilities_filtered[sapply(services, function(x) {
-    any(grepl(input$overall_category, x)) && any(grepl(input$service, x))
-  }), ]
-  
-  #print(filtered)
-  
-  return(filtered)
-})
 
+  # Reactive expression to filter data based on selected category and service
+  filtered_data <- reactive({
+    req(input$overall_category, input$service)
+    
+    services <- strsplit(geocoded_facilities_filtered$service_code_info, " \\* ")
+    
+    filtered <- geocoded_facilities_filtered[sapply(services, function(x) {
+      any(grepl(input$service, x))
+    }), ]
+    
+    return(filtered)
+  })
 
-
-  
   # Render leaflet map
   output$map <- renderLeaflet({
     leaflet() %>%
       addTiles()
   })
-  
+
   # Observe changes in filtered_data and update map markers
   observe({
     data <- filtered_data()
@@ -165,7 +150,7 @@ filtered_data <- reactive({
     leafletProxy("map", data = data) %>%
       clearMarkers() %>%
       addCircleMarkers(
-        ~longitude, ~latitude,
+        lng = ~longitude, lat = ~latitude,
         popup = ~name1,
         radius = 5,
         color = "blue",
@@ -180,14 +165,8 @@ filtered_data <- reactive({
   })
 }
 
-# Run the application
 shinyApp(ui = ui, server = server)
 
-
 ```
 
-
-```{r}
-
-```
 
