@@ -71,7 +71,7 @@ Can we make a leaflet map that you can filter by service offered
 
 # Services offered bool seperation 
 
-```{r}
+```{r include=FALSE}
 service_list <- strsplit(as.character(geocoded_facilities_filtered$service_code_info), " \\* | ")
 service_list
 
