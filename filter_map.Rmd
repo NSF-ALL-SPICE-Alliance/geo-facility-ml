@@ -156,12 +156,12 @@ server <- function(input, output, session) {
         color = "blue",
         stroke = FALSE,
         fillOpacity = 0.7
-      ) %>%
-      setView(
-        lng = mean(data$longitude, na.rm = TRUE), 
-        lat = mean(data$latitude, na.rm = TRUE), 
-        zoom = 6
-      )
+      ) #%>%
+      #setView(
+        #lng = mean(data$longitude, na.rm = TRUE), 
+        #lat = mean(data$latitude, na.rm = TRUE), 
+        #zoom = 6
+     # )
   })
 }
 
