@@ -15,6 +15,7 @@ library(mapview)
 library(shiny)
 library(leaflet)
 library(dplyr)
+library(data.table)
 ```
 
 Read in Data
@@ -269,34 +270,16 @@ hearing",
 ```
 
 ```{r}
-replace_abbrev_with_full <- function(abbrev_list, mapping) {
-  full_list <- sapply(abbrev_list, function(abbrev) {
-    if (abbrev %in% names(mapping)) {
-      return(mapping[[abbrev]])
-    } else {
-      return(abbrev)
-    }
-  }, USE.NAMES = FALSE)
-  return(full_list)
-}
-
-for (category in names(abbrev_dict)) {
-  abbrev_dict[[category]] <- replace_abbrev_with_full(abbrev_dict[[category]], full_definitions)
-}
-
+geocoded_facilities_filtered <- as.data.table(geocoded_facilities_filtered)
 ```
 
 ```{r}
-geocoded_facilities_filtered$service_code_info <- sapply(
-  strsplit(geocoded_facilities_filtered$service_code_info, " \\* "), 
-  replace_abbrev_with_full, 
-  full_definitions
-)
-geocoded_facilities_filtered$service_code_info <- sapply(
-  geocoded_facilities_filtered$service_code_info, 
-  paste, 
-  collapse = " * "
-)
+geocoded_facilities_filtered[, service_code_info := sapply(
+  strsplit(service_code_info, " * "), 
+  function(abbrev_list) {
+    paste(full_definitions[abbrev_list], collapse = " * ")
+  }
+)]
 ```
 
 ```{r}
@@ -312,28 +295,20 @@ server <- function(input, output, session) {
   # Observe changes in overall_category and update service choices dynamically
   observeEvent(input$overall_category, {
     req(input$overall_category)
-    updateSelectInput(session, "service", choices = abbrev_dict[[input$overall_category]])
+    # Get full definitions based on selected overall category
+    choices <- full_definitions[abbrev_dict[[input$overall_category]]]
+    updateSelectInput(session, "service", choices = choices)
   })
   
   # Reactive expression to filter data based on selected category and service
   filtered_data <- reactive({
     req(input$overall_category, input$service)
-    
-    services <- strsplit(geocoded_facilities_filtered$service_code_info, " \\* ")
-    
-    # Debugging print statements
-    print(paste("Selected Service:", input$service))
-    print(services)
-    
-    filtered <- geocoded_facilities_filtered[sapply(services, function(x) {
-      any(grepl(input$service, x))
-    }), ]
-    
-    #print(filtered)
-    
-    #return(filtered)
+    # Filter data based on selected service
+    filter_data <- geocoded_facilities_filtered[grep(input$service, service_code_info)]
+    return(filter_data)
   })
   
+  # Render leaflet map
   output$map <- renderLeaflet({
     leaflet() %>%
       addTiles()
@@ -357,7 +332,7 @@ server <- function(input, output, session) {
       setView(
         lng = mean(data$longitude, na.rm = TRUE), 
         lat = mean(data$latitude, na.rm = TRUE), 
-        zoom = 3
+        zoom = 6
       )
   })
 }
@@ -365,7 +340,4 @@ server <- function(input, output, session) {
 # Run the application
 shinyApp(ui = ui, server = server)
 ```
-
-
-
 
