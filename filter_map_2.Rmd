@@ -266,7 +266,8 @@ full_definitions<-c("SA" = "Substance use treatment",
 "AH" = "Sign language services for the deaf and hard of
 hearing",
 "NX" = "American Indian or Alaska Native languages",
-"FX" = "Other languages (excluding Spanish)")
+"FX" = "Other languages (excluding Spanish)",
+"ADLT" = "Adults")
 ```
 
 ```{r}
@@ -280,6 +281,12 @@ geocoded_facilities_filtered[, service_code_info := sapply(
     paste(full_definitions[abbrev_list], collapse = " * ")
   }
 )]
+```
+
+```{r}
+for (category in names(abbrev_dict)) {
+  abbrev_dict[[category]] <- full_definitions[abbrev_dict[[category]]]
+}
 ```
 
 ```{r}
