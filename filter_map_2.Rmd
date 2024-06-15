@@ -73,35 +73,164 @@ geocoded_facilities_filtered <- geocoded_facilities_filtered %>%
 ```{r}
 # Define categories and corresponding abbreviations
 abbrev_dict <- list(
-  "Treatment Types" = c("MH", "SUMH", "OP", "PHDT", "RES", "CMHC"),
-  "Medications" = c("CHLOR", "FLUPH", "HALOP", "LOXAP", "PERPH", "PIMOZ",
-                    "PROCH", "THIOT", "THIOR", "TRIFL", "ARIPI", "ASENA",
-                    "BREXP", "CARIP", "CLOZA", "ILOPE", "LURAS", "OLANZ",
-                    "OLANZF", "PALIP", "QUETI", "RISPE", "ZIPRA", "NRT",
-                    "NSC", "ANTPYCH"),
-  "Therapies and Treatment Approaches" = c("AT", "CBT", "CRT", "CFT", "DBT",
-                                           "ECT", "EMDR", "GT", "IDD", "IPT",
-                                           "KIT", "TMS", "TELE"),
-  "Assessments and Scales" = c("AIM"),
-  "Emergency and Crisis Services" = c("CIT", "PEON", "PEOFF", "WI"),
-  "Government and Organization Types" = c("LCCG", "DDF", "IH", "PVTP", "PVTN",
-                                          "STG", "TBG", "VAMC", "FED", "FQHC",
-                                          "MHC"),
-  "Funding Sources" = c("CLF", "CMHG", "CSBG", "FG", "ITU", "MC", "MD",
-                        "MI", "OSF", "PI", "SCJJ", "SEF", "SF", "SMHA",
-                        "SWFS", "VAF", "PA", "SS"),
-  "Target Populations" = c("TAY", "SE", "GL", "VET", "ADM", "MF", "CJ", "CO",
-                            "HV", "DV", "TRMA", "TBI", "ALZ", "PED", "PEFP",
-                            "PTSD", "SED", "SMI"),
-  "Health Screenings and Tests" = c("STU", "HIVT", "STDT", "TBS", "MST", "HBT",
-                                    "HCT", "LABT"),
-  "Support and Rehabilitation Services" = c("HS", "PEER", "TCC", "ACT", "AOT",
-                                            "CDM", "COOT", "DEC", "FPSY", "ICM",
-                                            "IMR", "LAD", "PRS", "SEMP", "SH",
-                                            "TPC", "VRS", "CM", "IPC", "SPS"),
-  "Smoking and Vaping Policies" = c("SMON", "SMOP", "SMPD", "VAPN", "VAPP",
-                                     "VPPD"),
-  "Language Services" = c("SP", "AH", "NX", "FX")
+  "Treatment Types" = c(
+    "Mental health treatment",
+    "Treatment for co-occurring substance use plus either serious mental health illness in adults/serious emotional disturbance in children",
+    "Outpatient",
+    "Partial hospitalization/day treatment",
+    "Residential/24-hour residential",
+    "Community mental health center"
+  ),
+  "Medications" = c(
+    "Chlorpromazine",
+    "Fluphenazine",
+    "Haloperidol",
+    "Loxapine",
+    "Perphenazine",
+    "Pimozide",
+    "Prochlorperazine",
+    "Thiothixene",
+    "Thioridazine",
+    "Trifluoperazine",
+    "Aripiprazole",
+    "Asenapine",
+    "Brexpiprazole",
+    "Cariprazine",
+    "Clozapine",
+    "Iloperidone",
+    "Lurasidone",
+    "Olanzapine",
+    "Olanzapine/Fluoxetine combination",
+    "Paliperidone",
+    "Quetiapine",
+    "Risperidone",
+    "Ziprasidone",
+    "Nicotine replacement",
+    "Non-nicotine smoking/tobacco cessation",
+    "Antipsychotics used in treatment of SMI"
+  ),
+  "Therapies and Treatment Approaches" = c(
+    "Activity therapy",
+    "Cognitive behavioral therapy",
+    "Cognitive remediation therapy",
+    "Couples/family therapy",
+    "Dialectical behavior therapy",
+    "Electroconvulsive therapy",
+    "Eye Movement Desensitization and Reprocessing therapy",
+    "Group therapy",
+    "Integrated Mental and Substance Use Disorder treatment",
+    "Individual psychotherapy",
+    "Ketamine Infusion Therapy",
+    "Transcranial Magnetic Stimulation",
+    "Telemedicine/telehealth therapy"
+  ),
+  "Assessments and Scales" = "Abnormal involuntary movement scale",
+  "Emergency and Crisis Services" = c(
+    "Crisis intervention team",
+    "Psychiatric emergency onsite services",
+    "Psychiatric emergency mobile/off-site services",
+    "Psychiatric emergency walk-in services"
+  ),
+  "Government and Organization Types" = c(
+    "Local, county, or community government",
+    "Department of Defense",
+    "Indian Health Services",
+    "Private for-profit organization",
+    "Private non-profit organization",
+    "State government",
+    "Tribal government",
+    "Veterans Affairs Medical Center or other VA healthcare facility",
+    "Federal Government",
+    "Federally Qualified Health Center",
+    "Mental health clinic or mental health center"
+  ),
+  "Funding Sources" = c(
+    "County or local government funds",
+    "Community Mental Health Block Grants",
+    "Community Service Block Grants",
+    "Federal Grants",
+    "IHS/Tribal/Urban (ITU) funds",
+    "Medicare",
+    "Medicaid",
+    "Federal military insurance (e.g., TRICARE)",
+    "Other State funds",
+    "Private health insurance",
+    "Private or Community foundation",
+    "State corrections or juvenile justice funds",
+    "State education agency funds",
+    "Cash or self-payment",
+    "State mental health agency (or equivalent) funds",
+    "State welfare or child and family services funds",
+    "U.S. Department of VA funds",
+    "Payment assistance (check with facility for details)",
+    "Sliding fee scale (fee is based on income and other factors)"
+  ),
+  "Target Populations" = c(
+    "Young adults",
+    "Seniors or older adults",
+    "Lesbian, gay, bisexual, transgender, or queer/questioning (LGBTQ)",
+    "Veterans",
+    "Active duty military",
+    "Members of military families",
+    "Criminal justice (other than DUI/DWI)/Forensic clients",
+    "Clients with co-occurring mental and substance use disorders",
+    "Clients with HIV or AIDS",
+    "Clients who have experienced intimate partner violence, domestic violence",
+    "Clients who have experienced trauma",
+    "Persons with traumatic brain injury (TBI)",
+    "Persons with Alzheimer's or dementia",
+    "Persons with eating disorders",
+    "Persons experiencing first-episode psychosis",
+    "Persons with post-traumatic stress disorder (PTSD)",
+    "Children/adolescents with serious emotional disturbance (SED)",
+    "Persons 18 and older with serious mental illness (SMI)"
+  ),
+  "Health Screenings and Tests" = c(
+    "Screening for tobacco use",
+    "HIV testing",
+    "STD testing",
+    "TB screening",
+    "Metabolic syndrome monitoring",
+    "Testing for Hepatitis B (HBV)",
+    "Testing for Hepatitis C (HCV)",
+    "Laboratory testing"
+  ),
+  "Support and Rehabilitation Services" = c(
+    "Housing services",
+    "Mentoring/peer support",
+    "Education and Counseling Services",
+    "Assertive community treatment",
+    "Assisted Outpatient Treatment",
+    "Chronic disease/illness management",
+    "Court-ordered outpatient treatment",
+    "Diet and exercise counseling",
+    "Family psychoeducation",
+    "Intensive case management",
+    "Illness management and recovery",
+    "Legal advocacy",
+    "Psychosocial rehabilitation services",
+    "Supported employment",
+    "Supported housing",
+    "Therapeutic foster care",
+    "Vocational rehabilitation services",
+    "Case management service",
+    "Integrated primary care services",
+    "Suicide prevention services"
+  ),
+  "Smoking and Vaping Policies" = c(
+    "Smoking not permitted",
+    "Smoking permitted without restriction",
+    "Smoking permitted in designated area",
+    "Vaping not permitted",
+    "Vaping permitted without restriction",
+    "Vaping permitted in designated area"
+  ),
+  "Language Services" = c(
+    "Spanish",
+    "Sign language services for the deaf and hard of hearing",
+    "American Indian or Alaska Native languages",
+    "Other languages (excluding Spanish)"
+  )
 )
 
 ```
@@ -270,66 +399,89 @@ hearing",
 "ADLT" = "Adults")
 ```
 
+
 ```{r}
 geocoded_facilities_filtered <- as.data.table(geocoded_facilities_filtered)
 ```
 
 ```{r}
-geocoded_facilities_filtered[, service_code_info := sapply(
-  strsplit(service_code_info, " * "), 
-  function(abbrev_list) {
-    paste(full_definitions[abbrev_list], collapse = " * ")
-  }
-)]
+setDT(geocoded_facilities_filtered)
+
+# Function to replace abbreviations with definitions
+replace_with_definitions <- function(text, dictionary) {
+  sapply(strsplit(text, " * "), function(abbrev_list) {
+    paste(unlist(dictionary[abbrev_list]), collapse = " * ")
+  })
+}
+
+# Update service_code_info column with definitions
+geocoded_facilities_filtered[, service_code_info := replace_with_definitions(service_code_info, full_definitions)]
 ```
 
-```{r}
-for (category in names(abbrev_dict)) {
-  abbrev_dict[[category]] <- full_definitions[abbrev_dict[[category]]]
-}
-```
 
 ```{r}
 ui <- fluidPage(
-  selectInput("overall_category", "Select Overall Category:", choices = names(abbrev_dict)),
-  selectInput("service", "Select Service:", choices = NULL),
-  leafletOutput("map")
+  
+  # Application title
+  titlePanel("Facility Map"),
+  
+  # Sidebar layout with input and output definitions
+  sidebarLayout(
+    sidebarPanel(
+      
+      # Select overall category
+      selectInput("overall_category", "Select Overall Category:",
+                  choices = names(abbrev_dict)),
+      
+      # Select service
+      selectInput("service", "Select Service:", choices = NULL)
+    ),
+    
+    # Main panel for displaying outputs
+    mainPanel(
+      
+      # Leaflet map output
+      leafletOutput("map", width = "100%", height = "600px")
+    )
+  )
 )
 
-# Server
+#### Server:
+
+# Define server logic
 server <- function(input, output, session) {
   
-  # Observe changes in overall_category and update service choices dynamically
-  observeEvent(input$overall_category, {
-    req(input$overall_category)
-    # Get full definitions based on selected overall category
-    choices <- full_definitions[abbrev_dict[[input$overall_category]]]
-    updateSelectInput(session, "service", choices = choices)
-  })
-  
-  # Reactive expression to filter data based on selected category and service
+  # Reactive expression for filtered data
   filtered_data <- reactive({
     req(input$overall_category, input$service)
-    # Filter data based on selected service
-    filter_data <- geocoded_facilities_filtered[grep(input$service, service_code_info)]
+    filter_data <- geocoded_facilities_filtered[grep(input$service, geocoded_facilities_filtered$service_code_info)]
     return(filter_data)
   })
   
-  # Render leaflet map
+  # Output to render leaflet map
   output$map <- renderLeaflet({
     leaflet() %>%
-      addTiles()
+      addTiles() %>%
+      setView(lng = -95.7129, lat = 37.0902, zoom = 4)  # Set initial view to USA
+      
   })
   
-  # Observe changes in filtered_data and update map markers
+  # Observer to update service choices dynamically
+  observeEvent(input$overall_category, {
+    choices <- abbrev_dict[[input$overall_category]]
+    updateSelectInput(session, "service", choices = choices)
+  })
+  
+  # Observer to add markers to leaflet map
   observe({
     data <- filtered_data()
-    req(nrow(data) > 0)
     
-    leafletProxy("map", data = data) %>%
+    leafletProxy("map") %>%
       clearMarkers() %>%
       addCircleMarkers(
-        lng = ~longitude, lat = ~latitude,
+        data = data,
+        lng = ~longitude,
+        lat = ~latitude,
         popup = ~name1,
         radius = 5,
         color = "blue",
@@ -339,12 +491,12 @@ server <- function(input, output, session) {
       setView(
         lng = mean(data$longitude, na.rm = TRUE), 
         lat = mean(data$latitude, na.rm = TRUE), 
-        zoom = 6
+        zoom = 3
       )
   })
 }
 
-# Run the application
+# Run the application 
 shinyApp(ui = ui, server = server)
 ```
 
