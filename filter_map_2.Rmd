@@ -423,7 +423,7 @@ geocoded_facilities_filtered[, service_code_info := replace_with_definitions(ser
 ui <- fluidPage(
   
   # Application title
-  titlePanel("Facility Map"),
+  titlePanel("MH Facility Map"),
   
   # Sidebar layout with input and output definitions
   sidebarLayout(
