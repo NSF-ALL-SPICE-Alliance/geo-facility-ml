@@ -59,7 +59,7 @@ geocoded_facilities_filtered <- geocoded_facilities %>%
 
 
 ```{r}
-mapview(geocoded_facilities_filtered, xcol = "longitude", ycol = "latitude", popup = "name1", crs = 4269, grid = FALSE, cex = 5)
+#mapview(geocoded_facilities_filtered, xcol = "longitude", ycol = "latitude", popup = "name1", crs = 4269, grid = FALSE, cex = 5)
 ```
 
 
@@ -407,7 +407,6 @@ geocoded_facilities_filtered <- as.data.table(geocoded_facilities_filtered)
 ```{r}
 setDT(geocoded_facilities_filtered)
 
-# Function to replace abbreviations with definitions
 replace_with_definitions <- function(text, dictionary) {
   sapply(strsplit(text, " * "), function(abbrev_list) {
     paste(unlist(dictionary[abbrev_list]), collapse = " * ")
