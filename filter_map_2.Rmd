@@ -16,6 +16,10 @@ library(shiny)
 library(leaflet)
 library(dplyr)
 library(data.table)
+library(leaflet.extras)
+library(sf)
+library(sp)
+library(raster)
 ```
 
 Read in Data
@@ -66,7 +70,7 @@ geocoded_facilities_filtered <- geocoded_facilities %>%
 
 ```{r}
 geocoded_facilities_filtered <- geocoded_facilities_filtered %>% 
-  select(name1, service_code_info, latitude, longitude)
+  dplyr::select(name1, service_code_info, latitude, longitude)
 ```
 
 
@@ -434,6 +438,7 @@ ui <- fluidPage(
       
       # Select service
       selectInput("service", "Select Service:", choices = NULL)
+    
     ),
     
     # Main panel for displaying outputs
@@ -493,9 +498,58 @@ server <- function(input, output, session) {
         zoom = 3
       )
   })
-}
+  
+coords <- as.data.table(geocoded_facilities_filtered)[, .(longitude, latitude)]
+    coords_sf <- st_as_sf(coords, coords = c("longitude", "latitude"), crs = 4326)
+    
+    # Create a grid of points
+    bounding_box <- st_bbox(coords_sf)
+    grid <- st_make_grid(st_as_sfc(bounding_box), cellsize = 0.1, what = "centers")
+    
+    # Calculate distances to the nearest marker
+    distances <- st_distance(grid, coords_sf)
+    min_distances <- apply(distances, 1, min)
+    
+    # Find the farthest points
+    max_distance <- max(min_distances)
+    farthest_points <- grid[min_distances == max_distance]
+    
+    # Add farthest points to the map
+    leafletProxy("map") %>%
+      addCircleMarkers(
+        lng = st_coordinates(farthest_points)[, 1],
+        lat = st_coordinates(farthest_points)[, 2],
+        radius = 5,
+        color = "red",
+        stroke = FALSE,
+        fillOpacity = 0.7
+      )
+  }
+
+
+
 
 # Run the application 
 shinyApp(ui = ui, server = server)
 ```
+
+
+```{r}
+states <- c("District of Columbia", "New Jersey", "Rhode Island", "Puerto Rico", "Massachusetts", "Guam",
+            "Connecticut", "U.S. Virgin Islands", "Maryland", "American Samoa", "Delaware", "Florida",
+            "New York", "Pennsylvania", "Ohio", "Northern Mariana Islands", "California", "Illinois",
+            "Hawaii", "North Carolina", "Virginia", "Georgia", "Indiana", "South Carolina", "Michigan",
+            "Tennessee", "New Hampshire", "Washington", "Texas", "Kentucky", "Wisconsin", "Louisiana",
+            "Alabama", "Missouri", "West Virginia", "Minnesota", "Vermont", "Arizona", "Mississippi",
+            "Oklahoma", "Arkansas", "Iowa", "Colorado", "Maine", "Oregon", "Utah", "Kansas", "Nevada",
+            "Nebraska", "Idaho", "New Mexico", "South Dakota", "North Dakota", "Montana", "Wyoming", "Alaska")
+
+pop_density <- c(11131, 1263, 1060, 936, 898, 824, 747, 737, 637, 578, 529, 422, 415, 290, 288, 274, 250, 226,
+                 223, 223, 221, 192, 192, 179, 178, 173, 157, 118, 117, 115, 109, 106, 101, 90, 74, 72, 70, 65,
+                 63, 59, 59, 57, 57, 45, 44, 42, 36, 29, 26, 24, 17, 12, 11, 7.8, 6.0, 1.3)
+
+
+population_density <- data.frame(State = states, Population_Density = pop_density)
+```
+
 
