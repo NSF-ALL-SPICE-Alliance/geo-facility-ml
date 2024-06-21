@@ -498,39 +498,15 @@ server <- function(input, output, session) {
         zoom = 3
       )
   })
-  
-coords <- as.data.table(geocoded_facilities_filtered)[, .(longitude, latitude)]
-    coords_sf <- st_as_sf(coords, coords = c("longitude", "latitude"), crs = 4326)
-    
-    # Create a grid of points
-    bounding_box <- st_bbox(coords_sf)
-    grid <- st_make_grid(st_as_sfc(bounding_box), cellsize = 0.1, what = "centers")
-    
-    # Calculate distances to the nearest marker
-    distances <- st_distance(grid, coords_sf)
-    min_distances <- apply(distances, 1, min)
-    
-    # Find the farthest points
-    max_distance <- max(min_distances)
-    farthest_points <- grid[min_distances == max_distance]
-    
-    # Add farthest points to the map
-    leafletProxy("map") %>%
-      addCircleMarkers(
-        lng = st_coordinates(farthest_points)[, 1],
-        lat = st_coordinates(farthest_points)[, 2],
-        radius = 5,
-        color = "red",
-        stroke = FALSE,
-        fillOpacity = 0.7
-      )
+
   }
 
 
 
 
 # Run the application 
-shinyApp(ui = ui, server = server)
+myapp<-shinyApp(ui = ui, server = server)
+myapp
 ```
 
 
@@ -552,4 +528,11 @@ pop_density <- c(11131, 1263, 1060, 936, 898, 824, 747, 737, 637, 578, 529, 422,
 population_density <- data.frame(State = states, Population_Density = pop_density)
 ```
 
+
+GITHUB PAGES
+```{r}
+library(shinylive)
+library(httpuv)
+shinylive::export(appdir = "myapp", destdir = "docs")
+```
 
