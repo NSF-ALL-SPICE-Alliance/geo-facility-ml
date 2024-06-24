@@ -505,8 +505,8 @@ server <- function(input, output, session) {
 
 
 # Run the application 
-myapp<-shinyApp(ui = ui, server = server)
-myapp
+app.R<-shinyApp(ui = ui, server = server)
+app.R
 ```
 
 
@@ -529,10 +529,7 @@ population_density <- data.frame(State = states, Population_Density = pop_densit
 ```
 
 
-GITHUB PAGES
 ```{r}
-library(shinylive)
-library(httpuv)
-shinylive::export(appdir = "myapp", destdir = "docs")
+save(app.R, file = "app.R")
 ```
 
