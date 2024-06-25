@@ -12,4 +12,5 @@
   - UI/aesthetic changes
   - live host
   - using ML, predict optimal location for new facility
-![facility_gif](https://github.com/NSF-ALL-SPICE-Alliance/geo-facility-ml/assets/113555832/c764b270-11de-42dd-b922-1c489b97885e)
+ 
+# ![facility_gif](https://github.com/NSF-ALL-SPICE-Alliance/geo-facility-ml/assets/113555832/c764b270-11de-42dd-b922-1c489b97885e)
