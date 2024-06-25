@@ -13,4 +13,4 @@
   - live host
   - using ML, predict optimal location for new facility
  
-# ![facility_gif](https://github.com/NSF-ALL-SPICE-Alliance/geo-facility-ml/assets/113555832/c764b270-11de-42dd-b922-1c489b97885e)
+# ![facility gif](https://github.com/NSF-ALL-SPICE-Alliance/geo-facility-ml/assets/113555832/df48b3ab-6068-4771-aa3d-bc82f5535c61)
