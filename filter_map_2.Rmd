@@ -571,33 +571,24 @@ library(sf)
 library(ggplot2)
 library(dplyr)
 library(mapview)
+library(leaflet)
+library(leaflet.extras)
 
-states <- states(cb = TRUE)
+counties <- counties(cb = TRUE)
 
 # Convert to sf object if not already
-states_sf <- st_as_sf(states)
+counties_sf <- st_as_sf(counties)
 
 ```
 
 DATA manip
 ```{r}
-mental_health_treatment_layer <- mapbox_test_data
+geocoded_facilities_filtered %>% 
+  filter(!is.na(service_code_info))
 
-substance_use_treatment_layer <- geocoded_facilities_filtered[grepl("Substance use treatment", service_code_info)]
-substance_use_treatment_layer[, service_code_info := "Substance use treatment"]
-
-cocurring_substance_use_layer <- geocoded_facilities_filtered[grepl("Treatment for co-occurring substance use plus either serious mental health illness in adults/serious emotional disturbance in children", service_code_info)]
-cocurring_substance_use_layer[, service_code_info := "Treatment for co-occurring substance use plus either serious mental health illness in adults/serious emotional disturbance in children"]
-
-outpatient_layer <- geocoded_facilities_filtered[grepl("Outpatient", service_code_info)]
-outpatient_layer[, service_code_info := "Outpatient"]
-
-outpatient_mh_facility_layer <- geocoded_facilities_filtered[grepl("Outpatient mental health facility", service_code_info)]
-outpatient_mh_facility_layer[, service_code_info := "Outpatient mental health facility"]
-
-outpatient_layer <- geocoded_facilities_filtered[grepl("Outpatient", service_code_info)]
-outpatient_layer[, service_code_info := "Outpatient"]
-
+facilities_long <- geocoded_facilities_filtered %>%
+  separate_rows(service_code_info, sep = " \\* ") %>%
+  rename(service = service_code_info)
 ```
 
 
@@ -605,20 +596,56 @@ outpatient_layer[, service_code_info := "Outpatient"]
 
 MAP settings
 ```{r}
-data_separated <- geocoded_facilities_filtered %>%
-  separate_rows(service_code_info, sep = " \\* ")
+facilities_sf <- st_as_sf(facilities_long, coords = c("longitude", "latitude"), crs = 4326)
+services <- unique(facilities_long$service)
+```
 
-drop_na(data_separated)
+```{r}
+layers <- list()
 
-data_sf <- st_as_sf(data_separated, coords = c("longitude", "latitude"), crs = 4326)
-
-data_split <- split(data_sf, data_sf$service_code_info)
-
-
-for(sector in names(data_split)) {
-  map <- map + mapview(data_split[[sector]], zcol = "service_code_info", layer.name = sector)
+for (service in services) {
+  service_sf <- facilities_sf %>% filter(service == !!service)
+  layers[[service]] <- mapview(service_sf, layer.name = service, legend = FALSE)
 }
 
-mapview(states_sf) + mapview(data_sf, color = "red", size = 0.1, popup = "name1")
+# Combine all layers into one map
+combined_map <- mapview(counties_sf, layer.name = "Counties")
+
+for (service in services) {
+  combined_map <- combined_map + layers[[service]]
+}
+
+# View the combined map
+combined_map
+```
+### leaflet approach
+
+
+```{r}
+m <- leaflet() %>%
+  addTiles() %>%
+  addPolygons(data = counties_sf, color = "black", weight = 1, smoothFactor = 0.5, 
+              opacity = 1.0, fillOpacity = 0.5, group = "Counties")
+
+# Get unique services
+services <- unique(facilities_long$service)
+
+# Add a layer for each service
+for (service in services) {
+  service_sf <- facilities_sf %>% filter(service == !!service)
+  m <- m %>%
+    addCircleMarkers(data = service_sf, ~longitude, ~latitude, color = "red", radius = 5,
+                     group = service, label = ~facility_name)
+}
+
+# Add layer control with radio buttons (base groups)
+m <- m %>%
+  addLayersControl(
+    baseGroups = services,
+    options = layersControlOptions(collapsed = FALSE)
+  )
+
+# View the map
+m
 ```
 
