@@ -20,6 +20,7 @@ library(leaflet.extras)
 library(sf)
 library(sp)
 library(raster)
+library(shinylive)
 ```
 
 Read in Data
@@ -530,6 +531,94 @@ population_density <- data.frame(State = states, Population_Density = pop_densit
 
 
 ```{r}
-save(app.R, file = "app.R")
+mapbox_test_data <- geocoded_facilities_filtered[grepl("Mental health treatment", service_code_info)]
+mapbox_test_data[, service_code_info := "Mental health treatment"]
+```
+
+```{r}
+library(dplyr)
+library(mapboxer)
+
+Sys.setenv(MAPBOX_TOKEN = "pk.eyJ1IjoicXVpbm5kYW5pZWwxMSIsImEiOiJjbHl5cnlmcHgwM2hxMmtwcWFuZXg1b2J5In0.PAKI_uHcXXDelkBcsY9L9g")
+
+# hosting
+
+# Add markers to the map
+mapbox_test_data %>%
+  dplyr::mutate(color = "cyan") %>%
+  as_mapbox_source(lng = "longitude", lat = "latitude") %>%
+  # Setup a map with the default source above
+  mapboxer(
+    center = c(-73.9165, 40.7114),
+    zoom = 2
+  ) %>%
+  # Add a navigation control
+  add_navigation_control() %>%
+  # Add a layer styling the data of the default source
+  add_circle_layer(
+    circle_color = c("get", "color"),
+    circle_radius = 3,
+    # Use a mustache template to add popups to the layer
+    popup = "{{name1}}"
+  )
+```
+
+
+
+```{r}
+library(tigris)
+library(sf)
+library(ggplot2)
+library(dplyr)
+library(mapview)
+
+states <- states(cb = TRUE)
+
+# Convert to sf object if not already
+states_sf <- st_as_sf(states)
+
+```
+
+DATA manip
+```{r}
+mental_health_treatment_layer <- mapbox_test_data
+
+substance_use_treatment_layer <- geocoded_facilities_filtered[grepl("Substance use treatment", service_code_info)]
+substance_use_treatment_layer[, service_code_info := "Substance use treatment"]
+
+cocurring_substance_use_layer <- geocoded_facilities_filtered[grepl("Treatment for co-occurring substance use plus either serious mental health illness in adults/serious emotional disturbance in children", service_code_info)]
+cocurring_substance_use_layer[, service_code_info := "Treatment for co-occurring substance use plus either serious mental health illness in adults/serious emotional disturbance in children"]
+
+outpatient_layer <- geocoded_facilities_filtered[grepl("Outpatient", service_code_info)]
+outpatient_layer[, service_code_info := "Outpatient"]
+
+outpatient_mh_facility_layer <- geocoded_facilities_filtered[grepl("Outpatient mental health facility", service_code_info)]
+outpatient_mh_facility_layer[, service_code_info := "Outpatient mental health facility"]
+
+outpatient_layer <- geocoded_facilities_filtered[grepl("Outpatient", service_code_info)]
+outpatient_layer[, service_code_info := "Outpatient"]
+
+```
+
+
+
+
+MAP settings
+```{r}
+data_separated <- geocoded_facilities_filtered %>%
+  separate_rows(service_code_info, sep = " \\* ")
+
+drop_na(data_separated)
+
+data_sf <- st_as_sf(data_separated, coords = c("longitude", "latitude"), crs = 4326)
+
+data_split <- split(data_sf, data_sf$service_code_info)
+
+
+for(sector in names(data_split)) {
+  map <- map + mapview(data_split[[sector]], zcol = "service_code_info", layer.name = sector)
+}
+
+mapview(states_sf) + mapview(data_sf, color = "red", size = 0.1, popup = "name1")
 ```
 
