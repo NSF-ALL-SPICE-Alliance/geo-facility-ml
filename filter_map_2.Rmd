@@ -423,18 +423,29 @@ geocoded_facilities_filtered[, service_code_info := replace_with_definitions(ser
 ```
 
 
+DATA manip
+```{r}
+geocoded_facilities_filtered %>% 
+  filter(!is.na(service_code_info))
+
+facilities_long <- geocoded_facilities_filtered %>%
+  separate_rows(service_code_info, sep = " \\* ") %>%
+  rename(service = service_code_info)
+```
+
+
 ```{r}
 ui <- fluidPage(
   
   # Application title
-  titlePanel("MH Facility Map"),
+  titlePanel("Mental Health Coverage"),
   
   # Sidebar layout with input and output definitions
   sidebarLayout(
     sidebarPanel(
       
       # Select overall category
-      selectInput("overall_category", "Select Overall Category:",
+      selectInput("overall_category", "Select Category:",
                   choices = names(abbrev_dict)),
       
       # Select service
@@ -456,11 +467,15 @@ ui <- fluidPage(
 # Define server logic
 server <- function(input, output, session) {
   
+  observeEvent(input$overall_category, {
+    choices <- abbrev_dict[[input$overall_category]]
+    updateSelectInput(session, "service", choices = choices)
+  })
+  
   # Reactive expression for filtered data
   filtered_data <- reactive({
     req(input$overall_category, input$service)
-    filter_data <- geocoded_facilities_filtered[grep(input$service, geocoded_facilities_filtered$service_code_info)]
-    return(filter_data)
+    facilities_long %>% filter(service == input$service)
   })
   
   # Output to render leaflet map
@@ -472,31 +487,43 @@ server <- function(input, output, session) {
   })
   
   # Observer to update service choices dynamically
-  observeEvent(input$overall_category, {
-    choices <- abbrev_dict[[input$overall_category]]
-    updateSelectInput(session, "service", choices = choices)
-  })
+  
   
   # Observer to add markers to leaflet map
   observe({
     data <- filtered_data()
     
-    leafletProxy("map") %>%
+    leafletProxy("map", data = data) %>%
       clearMarkers() %>%
+      clearGroup("Heatmap") %>% 
+      
+     addHeatmap(
+    lng = facilities_long$longitude, 
+    lat = facilities_long$latitude,
+    intensity = rep(1, nrow(facilities_long)), 
+    blur = 16, max = 0.1, radius = 10,
+    group = "Heatmap"
+   ) %>%
+      
       addCircleMarkers(
         data = data,
         lng = ~longitude,
         lat = ~latitude,
-        popup = ~name1,
-        radius = 5,
+        popup = ~paste0(name1),
+        radius = 3,
         color = "blue",
-        stroke = FALSE,
-        fillOpacity = 0.7
+        group = "Facilities"
       ) %>%
-      setView(
+      
+      addLayersControl(
+        baseGroups = c("Heatmap", "Facilities"),
+        options = layersControlOptions(collapsed = FALSE)
+      ) %>% 
+      
+    setView(
         lng = mean(data$longitude, na.rm = TRUE), 
         lat = mean(data$latitude, na.rm = TRUE), 
-        zoom = 3
+        zoom = 4
       )
   })
 
@@ -510,6 +537,11 @@ app.R<-shinyApp(ui = ui, server = server)
 app.R
 ```
 
+
+
+
+
+counties
 
 ```{r}
 states <- c("District of Columbia", "New Jersey", "Rhode Island", "Puerto Rico", "Massachusetts", "Guam",
@@ -529,42 +561,6 @@ pop_density <- c(11131, 1263, 1060, 936, 898, 824, 747, 737, 637, 578, 529, 422,
 population_density <- data.frame(State = states, Population_Density = pop_density)
 ```
 
-
-```{r}
-mapbox_test_data <- geocoded_facilities_filtered[grepl("Mental health treatment", service_code_info)]
-mapbox_test_data[, service_code_info := "Mental health treatment"]
-```
-
-```{r}
-library(dplyr)
-library(mapboxer)
-
-Sys.setenv(MAPBOX_TOKEN = "pk.eyJ1IjoicXVpbm5kYW5pZWwxMSIsImEiOiJjbHl5cnlmcHgwM2hxMmtwcWFuZXg1b2J5In0.PAKI_uHcXXDelkBcsY9L9g")
-
-# hosting
-
-# Add markers to the map
-mapbox_test_data %>%
-  dplyr::mutate(color = "cyan") %>%
-  as_mapbox_source(lng = "longitude", lat = "latitude") %>%
-  # Setup a map with the default source above
-  mapboxer(
-    center = c(-73.9165, 40.7114),
-    zoom = 2
-  ) %>%
-  # Add a navigation control
-  add_navigation_control() %>%
-  # Add a layer styling the data of the default source
-  add_circle_layer(
-    circle_color = c("get", "color"),
-    circle_radius = 3,
-    # Use a mustache template to add popups to the layer
-    popup = "{{name1}}"
-  )
-```
-
-
-
 ```{r}
 library(tigris)
 library(sf)
@@ -581,71 +577,63 @@ counties_sf <- st_as_sf(counties)
 
 ```
 
-DATA manip
+
+
+
+
+
+
+
+testing
+
+
 ```{r}
-geocoded_facilities_filtered %>% 
-  filter(!is.na(service_code_info))
-
-facilities_long <- geocoded_facilities_filtered %>%
-  separate_rows(service_code_info, sep = " \\* ") %>%
-  rename(service = service_code_info)
-```
-
-
-
-
-MAP settings
-```{r}
-facilities_sf <- st_as_sf(facilities_long, coords = c("longitude", "latitude"), crs = 4326)
-services <- unique(facilities_long$service)
+mapbox_test_data <- geocoded_facilities_filtered[grepl("Mental health treatment", service_code_info)]
+mapbox_test_data[, service_code_info := "Mental health treatment"]
 ```
 
 ```{r}
-layers <- list()
-
-for (service in services) {
-  service_sf <- facilities_sf %>% filter(service == !!service)
-  layers[[service]] <- mapview(service_sf, layer.name = service, legend = FALSE)
-}
-
-# Combine all layers into one map
-combined_map <- mapview(counties_sf, layer.name = "Counties")
-
-for (service in services) {
-  combined_map <- combined_map + layers[[service]]
-}
-
-# View the combined map
-combined_map
-```
-### leaflet approach
-
-
-```{r}
-m <- leaflet() %>%
+map <- leaflet() %>%
   addTiles() %>%
-  addPolygons(data = counties_sf, color = "black", weight = 1, smoothFactor = 0.5, 
-              opacity = 1.0, fillOpacity = 0.5, group = "Counties")
+  setView(lng = -73.9165, lat = 40.7114, zoom = 2)
 
-# Get unique services
-services <- unique(facilities_long$service)
-
-# Add a layer for each service
-for (service in services) {
-  service_sf <- facilities_sf %>% filter(service == !!service)
-  m <- m %>%
-    addCircleMarkers(data = service_sf, ~longitude, ~latitude, color = "red", radius = 5,
-                     group = service, label = ~facility_name)
-}
-
-# Add layer control with radio buttons (base groups)
-m <- m %>%
-  addLayersControl(
-    baseGroups = services,
-    options = layersControlOptions(collapsed = FALSE)
+map <- map %>%
+  addHeatmap(
+    lng = facilities_long$longitude, 
+    lat = facilities_long$latitude,
+    intensity = rep(1, nrow(facilities_long)), 
+    blur = 15, max = 0.05, radius = 15,
+    group = "Heatmap"
   )
 
-# View the map
-m
-```
+# Add a layer for each unique service
+services <- unique(facilities_long$service)
 
+# Add circle markers for each service
+for (service in services) {
+  if (!is.na(service) && service != "NA") {
+    filtered_data <- facilities_long %>% filter(service == !!service)
+    
+    map <- map %>%
+      addCircleMarkers(
+        data = filtered_data,
+        lng = ~longitude, lat = ~latitude,
+        popup = ~paste0(name1),
+        group = "Facilities", 
+        radius = 3,
+        color = "blue"
+      )
+  }
+}
+
+# Add layer control (start with all layers visible for testing)
+map <- map %>%
+  addLayersControl(
+    baseGroups = c("Heatmap", "Facilities"),
+    overlayGroups = services,
+    options = layersControlOptions(collapsed = TRUE)
+  )
+
+# Display the map
+map
+```
