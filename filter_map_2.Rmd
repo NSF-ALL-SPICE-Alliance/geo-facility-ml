@@ -549,8 +549,9 @@ server <- function(input, output, session) {
       clearGroup("Heatmap") %>% 
       
      addHeatmap(
-    lng = facilities_long$longitude, 
-    lat = facilities_long$latitude,
+    data = data,
+    lng = ~longitude, 
+    lat = ~latitude,
     intensity = rep(1, nrow(facilities_long)), 
     blur = 16, max = 0.1, radius = 10,
     group = "Heatmap"
