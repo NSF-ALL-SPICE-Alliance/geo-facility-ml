@@ -410,6 +410,11 @@ geocoded_facilities_filtered <- as.data.table(geocoded_facilities_filtered)
 ```
 
 ```{r}
+write.csv(geocoded_facilities_filtered, "~/Downloads/geocoded_facilities_filtered.csv", row.names = FALSE)
+```
+
+
+```{r}
 setDT(geocoded_facilities_filtered)
 
 replace_with_definitions <- function(text, dictionary) {
@@ -436,6 +441,9 @@ facilities_long <- geocoded_facilities_filtered %>%
 
 
 
+```{r}
+write.csv(facilities_long, "~/Downloads/facilities_long.csv", row.names = FALSE)
+```
 
 
 
@@ -597,5 +605,6 @@ server <- function(input, output, session) {
 app.R<-shinyApp(ui = ui, server = server)
 app.R
 ```
+```{r}
+devtools::install_github("UrbanInstitute/sedtR")
 ```
-
