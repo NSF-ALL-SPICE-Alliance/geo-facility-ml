@@ -491,6 +491,49 @@ counties_with_pop = subset(counties_with_pop, select = -c(County, STATEFP, COUNT
 # Convert counties_with_pop to an sf object
 counties_with_pop <- st_as_sf(counties_with_pop)
 counties_with_pop <- st_transform(counties_with_pop, crs = 4326)
+facilities_long <- st_as_sf(facilities_long, coords = c("longitude", "latitude"), crs = 4326)
+```
+
+```{r}
+joined_data <- st_join(facilities_long, counties_with_pop, join = st_within)
+
+final_data <- joined_data %>%
+  group_by(name1, geometry, NAMELSAD, service) %>%
+  summarise(
+    State = first(State),
+    population = max(population),  # You can use a different logic here if needed
+    AFFGEOID = first(AFFGEOID),
+    GEOID = first(GEOID),
+    .groups = "drop"
+  )
+
+coordinates <- st_coordinates(final_data)
+
+# Step 2: Remove the geometry column to make it a regular dataframe
+final_data <- final_data %>%
+  st_drop_geometry()
+
+# Step 3: Add longitude and latitude columns from the extracted coordinates
+final_data <- final_data %>%
+  mutate(
+    longitude = coordinates[, 1],  # X is longitude
+    latitude = coordinates[, 2]    # Y is latitude
+  )
+```
+
+```{r}
+final_data <- final_data %>%
+  mutate(popup_info = paste(
+    "<strong><u><b>", name1, "</u></b></strong>", "<br>",
+    "<b>County:</b> ", NAMELSAD, "<br>",
+    "<b>Population:</b> ", population
+  ))
+```
+
+FINAL_DATA = NORMAL LON/LAT
+FINAL_DATA_SF = POINT GEOM
+```{r}
+final_data_sf <- st_as_sf(final_data, coords = c("longitude", "latitude"))
 ```
 
 ```{r}
@@ -534,7 +577,7 @@ server <- function(input, output, session) {
   # Reactive expression for filtered data
   filtered_data <- reactive({
     req(input$overall_category, input$service)
-    facilities_long %>% filter(service == input$service)
+    final_data %>% filter(service == input$service)
   })
   
   # Output to render leaflet map
@@ -560,29 +603,23 @@ server <- function(input, output, session) {
     data = data,
     lng = ~longitude, 
     lat = ~latitude,
-    intensity = rep(1, nrow(facilities_long)), 
+    intensity = rep(1, nrow(final_data)), 
     blur = 16, max = 0.1, radius = 10,
     group = "Heatmap"
     ) %>%
+      
       
       addCircleMarkers(
         data = data,
         lng = ~longitude,
         lat = ~latitude,
-        popup = ~paste0(name1),
+        popup = ~popup_info,
         radius = 3,
         color = "blue",
         group = "Facilities"
         ) %>%
       
-       #addPolygons(
-        #data = counties_with_pop,
-        #color = "#444444",
-        #weight = 1,
-        #fillColor = "transparent",
-        #group = "Heatmap",
-        #popup = ~paste0("County: ", NAMELSAD, State, "<br>Population:         #", population)
-      #) %>%
+      
       
       addLayersControl(
         baseGroups = c("Heatmap", "Facilities"),
@@ -605,6 +642,9 @@ server <- function(input, output, session) {
 app.R<-shinyApp(ui = ui, server = server)
 app.R
 ```
+
 ```{r}
-devtools::install_github("UrbanInstitute/sedtR")
+library(RColorBrewer)
+pal <- colorNumeric(palette = "YlOrRd", domain = final_data$population)
 ```
+
