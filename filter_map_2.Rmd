@@ -524,9 +524,9 @@ final_data <- final_data %>%
 ```{r}
 final_data <- final_data %>%
   mutate(popup_info = paste(
-    "<strong><u><b>", name1, "</u></b></strong>", "<br>",
+    "<strong><u><b>", name1,"</u></b></strong>", "<br>",
     "<b>County:</b> ", NAMELSAD, "<br>",
-    "<b>Population:</b> ", population
+    "<b>Population:</b> ", format(population, big.mark = ",", scientific = FALSE)
   ))
 ```
 
@@ -537,8 +537,120 @@ final_data_sf <- st_as_sf(final_data, coords = c("longitude", "latitude"))
 ```
 
 ```{r}
+get_color <- function(population) {
+  if (is.na(population)) {
+    return("grey")  # Color for missing values
+  } else if (population == 9663345) {
+    return("red")
+  } else if (population == 1058474) {
+    return("orange")
+  } else if (population == 2686867) {
+    return("yellow")
+  } else if (population == 4585871) {
+    return("green")
+  } else if (population == 5087072) {
+    return("blue")
+  } else if (population == 170843) {
+    return("purple")
+  } else if (population == 505255) {
+    return("pink")
+  } else if (population == 789698) {
+    return("cyan")
+  } else if (population == 1190275) {
+    return("brown")
+  } else if (population == 448467) {
+    return("magenta")
+  } else if (population == 1326063) {
+    return("lime")
+  } else if (population == 744215) {
+    return("violet")
+  } else if (population == 1141878) {
+    return("navy")
+  } else if (population == 524673) {
+    return("teal")
+  } else if (population == 772144) {
+    return("coral")
+  } else if (population == 2561225) {
+    return("salmon")
+  } else if (population == 1751169) {
+    return("olive")
+  } else if (population == 286075) {
+    return("gold")
+  } else if (population == 1550542) {
+    return("maroon")
+  } else if (population == 400009) {
+    return("turquoise")
+  } else if (population == 1079105) {
+    return("indigo")
+  } else if (population == 1185813) {
+    return("skyblue")
+  } else if (population == 206930) {
+    return("lightgreen")
+  } else if (population == 310230) {
+    return("darkorange")
+  } else if (population == 916205) {
+    return("khaki")
+  } else if (population == 4835125) {
+    return("firebrick")
+  } else if (population == 957736) {
+    return("lavender")
+  } else if (population == 1623952) {
+    return("steelblue")
+  } else if (population == 2271380) {
+    return("darkred")
+  } else if (population == 987059) {
+    return("forestgreen")
+  } else if (population == 808866) {
+    return("chocolate")
+  } else if (population == 975328) {
+    return("crimson")
+  } else if (population == 968460) {
+    return("darkgreen")
+  } else if (population == 989408) {
+    return("darkblue")
+  } else if (population == 558036) {
+    return("lightcoral")
+  } else if (population == 1258713) {
+    return("midnightblue")
+  } else if (population == 671586) {
+    return("darkslategray")
+  } else if (population == 214870) {
+    return("goldenrod")
+  } else if (population == 910042) {
+    return("limegreen")
+  } else if (population == 196362) {
+    return("rosybrown")
+  } else if (population == 174805) {
+    return("lightpink")
+  } else if (population == 622237) {
+    return("mediumpurple")
+  } else if (population == 589540) {
+    return("peru")
+  } else if (population == 169481) {
+    return("silver")
+  } else if (population == 662895) {
+    return("slateblue")
+  } else if (population == 100984) {
+    return("plum")
+  } else if (population == 427354) {
+    return("tomato")
+  } else if (population == 2336573) {
+    return("powderblue")
+  } else if (population == 660615) {
+    return("peachpuff")
+  } else if (population == 578592) {
+    return("wheat")
+  } else if (population == 678972) {
+    return("saddlebrown")
+  } else {
+    return("black")  # Default color if no match
+  }
+}
+```
+
+```{r}
 ui <- fluidPage(
-  
+
   # Application title
   titlePanel("Mental Health Coverage"),
   
@@ -595,6 +707,8 @@ server <- function(input, output, session) {
   observe({
     data <- filtered_data()
     
+    data$color <- sapply(data$population, get_color)
+    
     leafletProxy("map", data = data) %>%
       clearMarkers() %>%
       clearGroup("Heatmap") %>% 
@@ -608,6 +722,7 @@ server <- function(input, output, session) {
     group = "Heatmap"
     ) %>%
       
+    
       
       addCircleMarkers(
         data = data,
@@ -615,16 +730,17 @@ server <- function(input, output, session) {
         lat = ~latitude,
         popup = ~popup_info,
         radius = 3,
-        color = "blue",
+        color = ~color,
         group = "Facilities"
         ) %>%
-      
       
       
       addLayersControl(
         baseGroups = c("Heatmap", "Facilities"),
         options = layersControlOptions(collapsed = FALSE)
       ) %>% 
+      
+      
       
     setView(
         lng = mean(data$longitude, na.rm = TRUE), 
@@ -633,7 +749,7 @@ server <- function(input, output, session) {
       )
   })
 
-  }
+}
 
 
 
