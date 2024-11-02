@@ -1,0 +1,580 @@
+---
+title: "Filter Map"
+author: "Connor Flynn"
+date: "5/20/2024"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readxl)
+library(here)
+library(tidygeocoder)
+library(mapview)
+library(shiny)
+library(leaflet)
+library(dplyr)
+library(data.table)
+library(leaflet.extras)
+library(sf)
+library(sp)
+library(raster)
+library(shinylive)
+```
+
+Read in Data
+
+```{r}
+#facilities <- read_excel(here("National_Directory_MH_Facilities_2022.xlsx"))
+```
+
+
+Merge Columns
+
+```{r}
+# facilities <- facilities %>%
+#   unite(whole_adress, c("street1", "city", "state", "zip"), sep = " ")
+```
+
+Geocode facilities (Takes 2.5 hours to run)
+
+```{r}
+# facilities <- facilities %>%
+#   geocode(whole_adress, method = 'osm', lat = latitude , long = longitude)
+```
+
+Save geocoded facilities file
+
+```{r}
+#write_csv(facilities, here("geocoded_facilities.csv"))
+```
+
+Read in geocoded facilities file
+
+```{r}
+geocoded_facilities <- read_csv(here("geocoded_facilities.csv"))
+```
+
+
+```{r}
+geocoded_facilities_filtered <- geocoded_facilities %>% 
+  drop_na(longitude, latitude)
+```
+
+
+```{r}
+#mapview(geocoded_facilities_filtered, xcol = "longitude", ycol = "latitude", popup = "name1", crs = 4269, grid = FALSE, cex = 5)
+```
+
+
+
+```{r}
+geocoded_facilities_filtered <- geocoded_facilities_filtered %>% 
+  dplyr::select(name1, service_code_info, latitude, longitude)
+```
+
+
+```{r}
+# Define categories and corresponding abbreviations
+abbrev_dict <- list(
+  "Treatment Types" = c(
+    "Mental health treatment",
+    "Treatment for co-occurring substance use plus either serious mental health illness in adults/serious emotional disturbance in children",
+    "Outpatient",
+    "Partial hospitalization/day treatment",
+    "Residential/24-hour residential",
+    "Community mental health center"
+  ),
+  "Medications" = c(
+    "Chlorpromazine",
+    "Fluphenazine",
+    "Haloperidol",
+    "Loxapine",
+    "Perphenazine",
+    "Pimozide",
+    "Prochlorperazine",
+    "Thiothixene",
+    "Thioridazine",
+    "Trifluoperazine",
+    "Aripiprazole",
+    "Asenapine",
+    "Brexpiprazole",
+    "Cariprazine",
+    "Clozapine",
+    "Iloperidone",
+    "Lurasidone",
+    "Olanzapine",
+    "Olanzapine/Fluoxetine combination",
+    "Paliperidone",
+    "Quetiapine",
+    "Risperidone",
+    "Ziprasidone",
+    "Nicotine replacement",
+    "Non-nicotine smoking/tobacco cessation",
+    "Antipsychotics used in treatment of SMI"
+  ),
+  "Therapies and Treatment Approaches" = c(
+    "Activity therapy",
+    "Cognitive behavioral therapy",
+    "Cognitive remediation therapy",
+    "Couples/family therapy",
+    "Dialectical behavior therapy",
+    "Electroconvulsive therapy",
+    "Eye Movement Desensitization and Reprocessing therapy",
+    "Group therapy",
+    "Integrated Mental and Substance Use Disorder treatment",
+    "Individual psychotherapy",
+    "Ketamine Infusion Therapy",
+    "Transcranial Magnetic Stimulation",
+    "Telemedicine/telehealth therapy"
+  ),
+  "Assessments and Scales" = "Abnormal involuntary movement scale",
+  "Emergency and Crisis Services" = c(
+    "Crisis intervention team",
+    "Psychiatric emergency onsite services",
+    "Psychiatric emergency mobile/off-site services",
+    "Psychiatric emergency walk-in services"
+  ),
+  "Government and Organization Types" = c(
+    "Local, county, or community government",
+    "Department of Defense",
+    "Indian Health Services",
+    "Private for-profit organization",
+    "Private non-profit organization",
+    "State government",
+    "Tribal government",
+    "Veterans Affairs Medical Center or other VA healthcare facility",
+    "Federal Government",
+    "Federally Qualified Health Center",
+    "Mental health clinic or mental health center"
+  ),
+  "Funding Sources" = c(
+    "County or local government funds",
+    "Community Mental Health Block Grants",
+    "Community Service Block Grants",
+    "Federal Grants",
+    "IHS/Tribal/Urban (ITU) funds",
+    "Medicare",
+    "Medicaid",
+    "Federal military insurance (e.g., TRICARE)",
+    "Other State funds",
+    "Private health insurance",
+    "Private or Community foundation",
+    "State corrections or juvenile justice funds",
+    "State education agency funds",
+    "Cash or self-payment",
+    "State mental health agency (or equivalent) funds",
+    "State welfare or child and family services funds",
+    "U.S. Department of VA funds",
+    "Payment assistance (check with facility for details)",
+    "Sliding fee scale (fee is based on income and other factors)"
+  ),
+  "Target Populations" = c(
+    "Young adults",
+    "Seniors or older adults",
+    "Lesbian, gay, bisexual, transgender, or queer/questioning (LGBTQ)",
+    "Veterans",
+    "Active duty military",
+    "Members of military families",
+    "Criminal justice (other than DUI/DWI)/Forensic clients",
+    "Clients with co-occurring mental and substance use disorders",
+    "Clients with HIV or AIDS",
+    "Clients who have experienced intimate partner violence, domestic violence",
+    "Clients who have experienced trauma",
+    "Persons with traumatic brain injury (TBI)",
+    "Persons with Alzheimer's or dementia",
+    "Persons with eating disorders",
+    "Persons experiencing first-episode psychosis",
+    "Persons with post-traumatic stress disorder (PTSD)",
+    "Children/adolescents with serious emotional disturbance (SED)",
+    "Persons 18 and older with serious mental illness (SMI)"
+  ),
+  "Health Screenings and Tests" = c(
+    "Screening for tobacco use",
+    "HIV testing",
+    "STD testing",
+    "TB screening",
+    "Metabolic syndrome monitoring",
+    "Testing for Hepatitis B (HBV)",
+    "Testing for Hepatitis C (HCV)",
+    "Laboratory testing"
+  ),
+  "Support and Rehabilitation Services" = c(
+    "Housing services",
+    "Mentoring/peer support",
+    "Education and Counseling Services",
+    "Assertive community treatment",
+    "Assisted Outpatient Treatment",
+    "Chronic disease/illness management",
+    "Court-ordered outpatient treatment",
+    "Diet and exercise counseling",
+    "Family psychoeducation",
+    "Intensive case management",
+    "Illness management and recovery",
+    "Legal advocacy",
+    "Psychosocial rehabilitation services",
+    "Supported employment",
+    "Supported housing",
+    "Therapeutic foster care",
+    "Vocational rehabilitation services",
+    "Case management service",
+    "Integrated primary care services",
+    "Suicide prevention services"
+  ),
+  "Smoking and Vaping Policies" = c(
+    "Smoking not permitted",
+    "Smoking permitted without restriction",
+    "Smoking permitted in designated area",
+    "Vaping not permitted",
+    "Vaping permitted without restriction",
+    "Vaping permitted in designated area"
+  ),
+  "Language Services" = c(
+    "Spanish",
+    "Sign language services for the deaf and hard of hearing",
+    "American Indian or Alaska Native languages",
+    "Other languages (excluding Spanish)"
+  )
+)
+```
+
+```{r}
+full_definitions<-c("SA" = "Substance use treatment",
+  "MH" = "Mental health treatment",
+  "SUMH" = "Treatment for co-occurring substance use plus either serious mental health illness in adults/serious emotional disturbance in children",
+  "HI" = "Hospital inpatient/24-hour hospital inpatient",
+  "OP" = "Outpatient",
+  "PHDT" = "Partial hospitalization/day treatment",
+  "RES" = "Residential/24-hour residential",
+  "CMHC" = "Community mental health center",
+  "CBHC" = "Certified Community Behavioral Health Clinic",
+  "MSMH" = "Multi-setting mental health facility (e.g., non-hospital residential plus either outpatient and/or partial hospitalization/day treatment)",
+  "OMH" = "Outpatient mental health facility",
+  "ORES" = "Other residential treatment facility",
+  "PH" = "Partial hospitalization/day treatment",
+  "PSY" = "Psychiatric hospital",
+  "RTCA" = "Residential treatment center (RTC) for adults",
+  "RTCC" = "Residential treatment center (RTC) for children",
+  "IPSY" = "Separate inpatient psychiatric unit of a general hospital",
+  "SHP" = "State hospital",
+  "VAHC" = "Veterans Affairs Medical Center or other VA healthcare facility",
+  "CHLOR" = "Chlorpromazine",
+  "DROPE" = "Droperidol",
+  "FLUPH" = "Fluphenazine",
+  "HALOP" = "Haloperidol",
+  "LOXAP" = "Loxapine",
+  "PERPH" = "Perphenazine",
+  "PIMOZ" = "Pimozide",
+  "PROCH" = "Prochlorperazine",
+  "THIOT" = "Thiothixene",
+  "THIOR" = "Thioridazine",
+  "TRIFL" = "Trifluoperazine",
+  "ARIPI" = "Aripiprazole",
+  "ASENA" = "Asenapine",
+  "BREXP" = "Brexpiprazole",
+  "CARIP" = "Cariprazine",
+  "CLOZA" = "Clozapine",
+  "ILOPE" = "Iloperidone",
+  "LURAS" = "Lurasidone",
+  "OLANZ" = "Olanzapine",
+  "OLANZF" = "Olanzapine/Fluoxetine combination",
+  "PALIP" = "Paliperidone",
+  "QUETI" = "Quetiapine",
+  "RISPE" = "Risperidone",
+  "ZIPRA" = "Ziprasidone",
+  "NRT" = "Nicotine replacement",
+  "NSC" = "Non-nicotine smoking/tobacco cessation",
+  "ANTPYCH" = "Antipsychotics used in treatment of SMI",
+  "AT" = "Activity therapy",
+  "CBT" = "Cognitive behavioral therapy",
+  "CRT" = "Cognitive remediation therapy",
+  "CFT" = "Couples/family therapy",
+  "DBT" = "Dialectical behavior therapy",
+  "ECT" = "Electroconvulsive therapy",
+  "EMDR" = "Eye Movement Desensitization and Reprocessing therapy",
+  "GT" = "Group therapy",
+  "IDD" = "Integrated Mental and Substance Use Disorder treatment",
+  "IPT" = "Individual psychotherapy",
+  "KIT" = "Ketamine Infusion Therapy",
+  "TMS" = "Transcranial Magnetic Stimulation",
+  "TELE" = "Telemedicine/telehealth therapy",
+  "AIM" = "Abnormal involuntary movement scale",
+  "CIT" = "Crisis intervention team",
+  "PEON" = "Psychiatric emergency onsite services",
+  "PEOFF" = "Psychiatric emergency mobile/off-site services",
+  "WI" = "Psychiatric emergency walk-in services",
+  "LCCG" = "Local, county, or community government",
+  "DDF" = "Department of Defense",
+  "IH" = "Indian Health Services",
+  "PVTP" = "Private for-profit organization",
+  "PVTN" = "Private non-profit organization",
+  "STG" = "State government",
+  "TBG" = "Tribal government",
+  "VAMC" = "U.S. Department of Veterans Affairs",
+  "FED" = "Federal Government",
+  "FQHC" = "Federally Qualified Health Center",
+  "MHC" = "Mental health clinic or mental health center",
+  "CLF" = "County or local government funds",
+  "CMHG" = "Community Mental Health Block Grants",
+  "CSBG" = "Community Service Block Grants",
+  "FG" = "Federal Grants",
+  "ITU" = "IHS/Tribal/Urban (ITU) funds",
+  "MC" = "Medicare",
+  "MD" = "Medicaid",
+  "MI" = "Federal military insurance (e.g., TRICARE)",
+  "OSF" = "Other State funds",
+  "PI" = "Private health insurance",
+  "PCF" = "Private or Community foundation",
+  "SCJJ" = "State corrections or juvenile justice funds",
+  "SEF" = "State education agency funds",
+  "SF" = "Cash or self-payment",
+  "SI" = "State-financed health insurance plan other than Medicaid",
+  "SMHA" = "State mental health agency (or equivalent) funds",
+  "SWFS" = "State welfare or child and family services funds",
+  "VAF" = "U.S. Department of VA funds",
+  "PA" = "Payment assistance (check with facility for details)",
+  "SS" = "Sliding fee scale (fee is based on income and other factors)",
+  "TAY" = "Young adults",
+  "SE" = "Seniors or older adults",
+  "GL" = "Lesbian, gay, bisexual, transgender, or queer/questioning (LGBTQ)",
+  "VET" = "Veterans",
+  "ADM" = "Active duty military",
+  "MF" = "Members of military families",
+  "CJ" = "Criminal justice (other than DUI/DWI)/Forensic clients",
+  "CO" = "Clients with co-occurring mental and substance use disorders",
+  "HV" = "Clients with HIV or AIDS",
+  "DV" = "Clients who have experienced intimate partner violence, domestic violence",
+  "TRMA" = "Clients who have experienced trauma",
+  "TBI" = "Persons with traumatic brain injury (TBI)",
+  "ALZ" = "Persons with Alzheimer's or dementia",
+  "PED" = "Persons with eating disorders",
+  "PEFP" = "Persons experiencing first-episode psychosis",
+  "PTSD" = "Persons with post-traumatic stress disorder (PTSD)",
+  "SED" = "Children/adolescents with serious emotional disturbance (SED)",
+  "SMI" = "Persons 18 and older with serious mental illness (SMI)",
+  "STU" = "Screening for tobacco use",
+  "HIVT" = "HIV testing",
+  "STDT" = "STD testing",
+  "TBS" = "TB screening",
+  "MST" = "Metabolic syndrome monitoring",
+  "HBT" = "Testing for Hepatitis B (HBV)",
+  "HCT" = "Testing for Hepatitis C (HCV)",
+  "LABT" = "Laboratory testing",
+  "HS" = "Housing services",
+  "PEER" = "Mentoring/peer support",
+  "TCC" = "Education and Counseling Services",
+  "SMON" = "Smoking not permitted",
+  "SMOP" = "Smoking permitted without restriction",
+  "SMPD" = "Smoking permitted in designated area",
+  "CHLD" = "Children/adolescents",
+  "SNR" = "Seniors",
+  "YAD" = "Young adults",
+  "SP" = "Spanish",
+  "AH" = "Sign language services for the deaf and hard of hearing",
+  "NX" = "American Indian or Alaska Native languages",
+  "FX" = "Other languages (excluding Spanish)",
+  "VAPN" = "Vaping not permitted",
+  "VAPP" = "Vaping permitted without restriction",
+  "VPPD" = "Vaping permitted in designated area",
+  "ACT" = "Assertive community treatment",
+  "AOT" = "Assisted Outpatient Treatment",
+  "CDM" = "Chronic disease/illness management",
+  "COOT" = "Court-ordered outpatient treatment",
+  "DEC" = "Diet and exercise counseling",
+  "FPSY" = "Family psychoeducation",
+  "ICM" = "Intensive case management",
+  "IMR" = "Illness management and recovery",
+  "LAD" = "Legal advocacy",
+  "PRS" = "Psychosocial rehabilitation services",
+  "SEMP" = "Supported employment",
+  "SH" = "Supported housing",
+  "TPC" = "Therapeutic foster care",
+  "VRS" = "Vocational rehabilitation services",
+  "CM" = "Case management service",
+  "IPC" = "Integrated primary care services",
+  "SPS" = "Suicide prevention services",
+"SMON" = "Smoking not permitted", "SMOP" = "Smoking permitted without restriction", "SMPD" = "Smoking permitted in designated area", "VAPN" = "Vaping not permitted", "VAPP" = "Vaping permitted without restriction", "VPPD" = "Vaping permitted in designated area",
+"SP" = "Spanish",
+"AH" = "Sign language services for the deaf and hard of
+hearing",
+"NX" = "American Indian or Alaska Native languages",
+"FX" = "Other languages (excluding Spanish)",
+"ADLT" = "Adults")
+```
+
+
+```{r}
+geocoded_facilities_filtered <- as.data.table(geocoded_facilities_filtered)
+```
+
+```{r}
+#write.csv(geocoded_facilities_filtered, "~/Downloads/geocoded_facilities_filtered.csv", row.names = FALSE)
+```
+```{r}
+setDT(geocoded_facilities_filtered)
+replace_with_definitions <- function(text, dictionary) {
+  sapply(strsplit(text, " * "), function(abbrev_list) {
+    paste(unlist(dictionary[abbrev_list]), collapse = " * ")
+  })
+}
+# Update service_code_info column with definitions
+geocoded_facilities_filtered[, service_code_info := replace_with_definitions(service_code_info, full_definitions)]
+```
+
+
+DATA manip
+```{r}
+geocoded_facilities_filtered %>% 
+  filter(!is.na(service_code_info))
+facilities_long <- geocoded_facilities_filtered %>%
+  separate_rows(service_code_info, sep = " \\* ") %>%
+  rename(service = service_code_info)
+```
+
+
+
+
+```{r}
+#write.csv(facilities_long, "~/Downloads/facilities_long.csv", row.names = FALSE)
+```
+
+
+
+
+counties
+
+
+```{r}
+county_data <- get_acs(
+  geography = "county", 
+  variables = "B01003_001",  # Total population variable
+  year = 2020, 
+  geometry = TRUE
+)
+
+
+# Step 6: Transform data for leaflet (project spatial data)
+county_data <- st_transform(county_data, crs = 4326)  # Ensure data is in the 
+
+class(county_data)
+```
+
+
+county populations - census data
+```{r}
+# county_pops <- read_excel(here("county_pops.xlsx"))
+# names(county_pops)[names(county_pops) == "table with row headers in column A and column headers in rows 3 through 4 (leading dots indicate sub-parts)"] <- "counties"
+# county_pops<-county_pops[-c(0, 1, 2, 3), ]
+# county_pops = subset(county_pops, select = -c(...2, ...3, ...4, ...5))
+# names(county_pops)[names(county_pops) == "...6"] <- "population"
+```
+
+
+sf combination.
+```{r}
+# library(tidyr)
+# split_columns <- do.call(rbind, strsplit(county_pops$counties, ", "))
+# county_pops$County <- split_columns[, 1]
+# county_pops$State <- split_columns[, 2]
+# county_pops = subset(county_pops, select = -c(counties))
+# names(counties_sf)[names(counties_sf) == "STATE_NAME"] <- "State"
+# counties_with_pop<-merge(county_pops, counties_sf, by = "State")
+# counties_with_pop = subset(counties_with_pop, select = -c(County, STATEFP, COUNTYFP, COUNTYNS, NAME, STUSPS, LSAD, ALAND, AWATER))
+# # Convert counties_with_pop to an sf object
+# counties_with_pop <- st_as_sf(counties_with_pop)
+# counties_with_pop <- st_transform(counties_with_pop, crs = 4326)
+```
+
+
+
+
+```{r}
+server <- function(input, output, session) {
+  
+  observeEvent(input$overall_category, {
+    choices <- abbrev_dict[[input$overall_category]]
+    updateSelectInput(session, "service", choices = choices)
+  })
+  
+  # Reactive expression for filtered data
+  filtered_data <- reactive({
+    req(input$overall_category, input$service)
+    facilities_long %>% filter(service == input$service)
+  })
+  
+  # Define breaks for binned population and create color palette
+  bins <- c(0, 5000, 10000, 50000, 100000, 500000, 1000000, Inf)
+  pal <- colorBin("YlGnBu", domain = county_data$estimate, bins = bins)
+  
+  # Output to render leaflet map
+  output$map <- renderLeaflet({
+    leaflet() %>%
+      addTiles() %>%
+      setView(lng = -95.7129, lat = 37.0902, zoom = 4)  # Set initial view to USA
+  })
+  
+  # Observer to add markers and polygons to leaflet map
+  observe({
+    data <- filtered_data()
+    
+    leafletProxy("map", data = data) %>%
+      clearMarkers() %>%
+      clearGroup("Heatmap") %>% 
+      
+      addHeatmap(
+        data = data,
+        lng = ~longitude, 
+        lat = ~latitude,
+        intensity = rep(1, nrow(facilities_long)), 
+        blur = 16, max = 0.1, radius = 10,
+        group = "Heatmap"
+      ) %>%
+      
+      addCircleMarkers(
+        data = data,
+        lng = ~longitude,
+        lat = ~latitude,
+        popup = ~paste0(name1),
+        radius = 3,
+        color = "blue",
+        group = "Facilities"
+      ) %>%
+      
+      addPolygons(
+        data = county_data,
+        color = "#444444", # Outline color for counties
+        weight = 1,
+        fillColor = ~pal(estimate),
+        fillOpacity = 0.7,
+        popup = ~paste0("County: ", NAME, "<br>Population Estimate: ", estimate),
+        group = "Population Estimate"
+      ) %>%
+      
+      addLegend(
+        "bottomright",
+        pal = pal,
+        values = county_data$estimate,
+        title = "Population Estimate",
+        opacity = 0.7,
+        labFormat = labelFormat(suffix = "")
+      ) %>%
+      
+      addLayersControl(
+        overlayGroups = c("Heatmap", "Facilities", "Population Estimate"),
+        options = layersControlOptions(collapsed = FALSE)
+      ) %>% 
+      
+      setView(
+        lng = mean(data$longitude, na.rm = TRUE), 
+        lat = mean(data$latitude, na.rm = TRUE), 
+        zoom = 4
+      )
+  })
+}
+app.R <- shinyApp(ui = ui, server = server)
+app.R
+
+```
+
+
