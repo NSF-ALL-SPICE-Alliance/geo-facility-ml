@@ -57,10 +57,6 @@ geocoded_facilities_filtered <- geocoded_facilities %>%
 ```
 
 ```{r}
-#mapview(geocoded_facilities_filtered, xcol = "longitude", ycol = "latitude", popup = "name1", crs = 4269, grid = FALSE, cex = 5)
-```
-
-```{r}
 geocoded_facilities_filtered <- geocoded_facilities_filtered %>% 
   dplyr::select(name1, service_code_info, latitude, longitude)
 ```
@@ -398,10 +394,6 @@ geocoded_facilities_filtered <- as.data.table(geocoded_facilities_filtered)
 ```
 
 ```{r}
-#write.csv(geocoded_facilities_filtered, "~/Downloads/geocoded_facilities_filtered.csv", row.names = FALSE)
-```
-
-```{r}
 setDT(geocoded_facilities_filtered)
 replace_with_definitions <- function(text, dictionary) {
   sapply(strsplit(text, " * "), function(abbrev_list) {
@@ -421,13 +413,10 @@ facilities_long <- geocoded_facilities_filtered %>%
   rename(service = service_code_info)
 ```
 
-```{r}
-#write.csv(facilities_long, "~/Downloads/facilities_long.csv", row.names = FALSE)
-```
-
 counties
 ```{r}
 ## download county data from tidycensus
+# st_transform to match coordinate systems
 
 county_data <- get_acs(
   geography = "county", 
@@ -443,35 +432,27 @@ county_data <- st_transform(county_data, crs = 4326)  # Ensure data is in the
 class(county_data)
 ```
 
-county populations - census data
 ```{r}
-# county_pops <- read_excel(here("county_pops.xlsx"))
-# names(county_pops)[names(county_pops) == "table with row headers in column A and column headers in rows 3 through 4 (leading dots indicate sub-parts)"] <- "counties"
-# county_pops<-county_pops[-c(0, 1, 2, 3), ]
-# county_pops = subset(county_pops, select = -c(...2, ...3, ...4, ...5))
-# names(county_pops)[names(county_pops) == "...6"] <- "population"
-```
 
-sf combination.
-```{r}
-# library(tidyr)
-# split_columns <- do.call(rbind, strsplit(county_pops$counties, ", "))
-# county_pops$County <- split_columns[, 1]
-# county_pops$State <- split_columns[, 2]
-# county_pops = subset(county_pops, select = -c(counties))
-# names(counties_sf)[names(counties_sf) == "STATE_NAME"] <- "State"
-# counties_with_pop<-merge(county_pops, counties_sf, by = "State")
-# counties_with_pop = subset(counties_with_pop, select = -c(County, STATEFP, COUNTYFP, COUNTYNS, NAME, STUSPS, LSAD, ALAND, AWATER))
-# # Convert counties_with_pop to an sf object
-# counties_with_pop <- st_as_sf(counties_with_pop)
-# counties_with_pop <- st_transform(counties_with_pop, crs = 4326)
-```
-
-```{r}
 ui <- fluidPage(
+  tags$style(HTML("
+    body {
+      background-color: #AAD3DF; /* Background color of the entire app */
+    }
+    .selectize-input, .selectize-dropdown-content {
+      background-color: #8cb4f5; /* Dropdown background color */
+      color: #333333; /* Dropdown text color */
+    }
+       h2 {  /* Style for title text */
+      font-family: 'Sans-serif', verdana; /* Change font family */
+      font-size: 28px; /* Font size */
+      color: #000000; /* Text color */
+      font-weight: bold; /* Bold text */
+    }
+  ")),
 
   # Application title
-  titlePanel("Mental Health Coverage"),
+  titlePanel("US Mental Health Facilities"),
   
   # Sidebar layout with input and output definitions
   sidebarLayout(
@@ -482,9 +463,14 @@ ui <- fluidPage(
                   choices = names(abbrev_dict)),
       
       # Select service
-      selectInput("service", "Select Service:", choices = NULL)
+      selectInput("service", "Select Service:", choices = NULL),
     
-    ),
+    
+    h4("Controls"),
+    p("Click and drag to navigate the map. Scroll or use the '+/-' to zoom in and out."),
+    p("Use the first dropdown to select a category of services. Use the second dropdown to select a service within that category."),
+    p("Select from the options in the upper-right to control what layers are displayed."),
+    p("Clicking on either a county or a facility will reveal additional details.")),
     
     # Main panel for displaying outputs
     mainPanel(
@@ -517,7 +503,7 @@ server <- function(input, output, session) {
     
     leaflet(options = leafletOptions(minZoom = 3)) %>%
       
-      ## polygons & legend in 'render leaflet' section improves load.                everything in here is updated once at startup, everything in 'observe' is       updated every time we select a new dropdown option
+      ## polygons & legend in 'render leaflet' section improves load. everything in here is updated once at ## startup, everything in 'observe' is updated every time we select a new dropdown option
       
       addTiles() %>%
       
@@ -537,8 +523,7 @@ server <- function(input, output, session) {
         weight = 1,
         fillColor = ~pal(estimate),
         fillOpacity = 0.7,
-        popup = ~paste0("County: ", NAME, "<br>Population Estimate: ", ... =           estimate),
-        group = "Population Estimate"
+        popup = ~paste0("County: ", NAME, "<br>Population Estimate: ", ... =           estimate)
       ) %>%
       
        # Set initial view to       USA 
@@ -582,9 +567,9 @@ server <- function(input, output, session) {
       
       addLayersControl(
         overlayGroups = c("Heatmap", "Facilities"),
-        baseGroups = ("Population Estimate"),
         options = layersControlOptions(collapsed = FALSE)
       ) %>% 
+      hideGroup("Heatmap") %>% 
       
       setView(
         lng = mean(data$longitude, na.rm = TRUE), 
