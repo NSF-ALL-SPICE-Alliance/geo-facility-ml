@@ -21,59 +21,49 @@ library(sf)
 library(sp)
 library(raster)
 library(shinylive)
+library(tidycensus)
 ```
 
 Read in Data
-
 ```{r}
 #facilities <- read_excel(here("National_Directory_MH_Facilities_2022.xlsx"))
 ```
 
-
 Merge Columns
-
 ```{r}
 # facilities <- facilities %>%
 #   unite(whole_adress, c("street1", "city", "state", "zip"), sep = " ")
 ```
 
 Geocode facilities (Takes 2.5 hours to run)
-
 ```{r}
 # facilities <- facilities %>%
 #   geocode(whole_adress, method = 'osm', lat = latitude , long = longitude)
 ```
 
 Save geocoded facilities file
-
 ```{r}
 #write_csv(facilities, here("geocoded_facilities.csv"))
 ```
 
 Read in geocoded facilities file
-
 ```{r}
 geocoded_facilities <- read_csv(here("geocoded_facilities.csv"))
 ```
-
 
 ```{r}
 geocoded_facilities_filtered <- geocoded_facilities %>% 
   drop_na(longitude, latitude)
 ```
 
-
 ```{r}
 #mapview(geocoded_facilities_filtered, xcol = "longitude", ycol = "latitude", popup = "name1", crs = 4269, grid = FALSE, cex = 5)
 ```
-
-
 
 ```{r}
 geocoded_facilities_filtered <- geocoded_facilities_filtered %>% 
   dplyr::select(name1, service_code_info, latitude, longitude)
 ```
-
 
 ```{r}
 # Define categories and corresponding abbreviations
@@ -403,7 +393,6 @@ hearing",
 "ADLT" = "Adults")
 ```
 
-
 ```{r}
 geocoded_facilities_filtered <- as.data.table(geocoded_facilities_filtered)
 ```
@@ -411,6 +400,7 @@ geocoded_facilities_filtered <- as.data.table(geocoded_facilities_filtered)
 ```{r}
 #write.csv(geocoded_facilities_filtered, "~/Downloads/geocoded_facilities_filtered.csv", row.names = FALSE)
 ```
+
 ```{r}
 setDT(geocoded_facilities_filtered)
 replace_with_definitions <- function(text, dictionary) {
@@ -422,7 +412,6 @@ replace_with_definitions <- function(text, dictionary) {
 geocoded_facilities_filtered[, service_code_info := replace_with_definitions(service_code_info, full_definitions)]
 ```
 
-
 DATA manip
 ```{r}
 geocoded_facilities_filtered %>% 
@@ -432,20 +421,14 @@ facilities_long <- geocoded_facilities_filtered %>%
   rename(service = service_code_info)
 ```
 
-
-
-
 ```{r}
 #write.csv(facilities_long, "~/Downloads/facilities_long.csv", row.names = FALSE)
 ```
 
-
-
-
 counties
-
-
 ```{r}
+## download county data from tidycensus
+
 county_data <- get_acs(
   geography = "county", 
   variables = "B01003_001",  # Total population variable
@@ -460,7 +443,6 @@ county_data <- st_transform(county_data, crs = 4326)  # Ensure data is in the
 class(county_data)
 ```
 
-
 county populations - census data
 ```{r}
 # county_pops <- read_excel(here("county_pops.xlsx"))
@@ -469,7 +451,6 @@ county populations - census data
 # county_pops = subset(county_pops, select = -c(...2, ...3, ...4, ...5))
 # names(county_pops)[names(county_pops) == "...6"] <- "population"
 ```
-
 
 sf combination.
 ```{r}
@@ -486,10 +467,34 @@ sf combination.
 # counties_with_pop <- st_transform(counties_with_pop, crs = 4326)
 ```
 
-
-
-
 ```{r}
+ui <- fluidPage(
+
+  # Application title
+  titlePanel("Mental Health Coverage"),
+  
+  # Sidebar layout with input and output definitions
+  sidebarLayout(
+    sidebarPanel(
+      
+      # Select overall category
+      selectInput("overall_category", "Select Category:",
+                  choices = names(abbrev_dict)),
+      
+      # Select service
+      selectInput("service", "Select Service:", choices = NULL)
+    
+    ),
+    
+    # Main panel for displaying outputs
+    mainPanel(
+      
+      # Leaflet map output
+      leafletOutput("map", width = "100%", height = "600px")
+    )
+  )
+)
+
 server <- function(input, output, session) {
   
   observeEvent(input$overall_category, {
@@ -509,12 +514,44 @@ server <- function(input, output, session) {
   
   # Output to render leaflet map
   output$map <- renderLeaflet({
-    leaflet() %>%
+    
+    leaflet(options = leafletOptions(minZoom = 3)) %>%
+      
+      ## polygons & legend in 'render leaflet' section improves load.                everything in here is updated once at startup, everything in 'observe' is       updated every time we select a new dropdown option
+      
       addTiles() %>%
-      setView(lng = -95.7129, lat = 37.0902, zoom = 4)  # Set initial view to USA
+      
+      addLegend(
+        "bottomright",
+        pal = pal,
+        values = county_data$estimate,
+        title = "Population Estimate",
+        opacity = 0.7,
+        labFormat = labelFormat(suffix = ""),
+        group = "Population Estimate"
+      ) %>%
+      
+       addPolygons(
+        data = county_data,
+        color = "00FFFFFF", # Outline color for counties
+        weight = 1,
+        fillColor = ~pal(estimate),
+        fillOpacity = 0.7,
+        popup = ~paste0("County: ", NAME, "<br>Population Estimate: ", ... =           estimate),
+        group = "Population Estimate"
+      ) %>%
+      
+       # Set initial view to       USA 
+      setView(lng = -95.7129, lat = 37.0902, zoom = 4) %>% 
+    
+      setMaxBounds(lng1 = -188.29
+                , lat1 = 5.40
+                , lng2 = -49.49
+                , lat2 = 101.30 )
+
   })
   
-  # Observer to add markers and polygons to leaflet map
+  # Observer updates markers and polygons every selection
   observe({
     data <- filtered_data()
     
@@ -528,7 +565,8 @@ server <- function(input, output, session) {
         lat = ~latitude,
         intensity = rep(1, nrow(facilities_long)), 
         blur = 16, max = 0.1, radius = 10,
-        group = "Heatmap"
+        group = "Heatmap",
+        
       ) %>%
       
       addCircleMarkers(
@@ -538,43 +576,26 @@ server <- function(input, output, session) {
         popup = ~paste0(name1),
         radius = 3,
         color = "blue",
-        group = "Facilities"
-      ) %>%
+        group = "Facilities",
       
-      addPolygons(
-        data = county_data,
-        color = "#444444", # Outline color for counties
-        weight = 1,
-        fillColor = ~pal(estimate),
-        fillOpacity = 0.7,
-        popup = ~paste0("County: ", NAME, "<br>Population Estimate: ", estimate),
-        group = "Population Estimate"
-      ) %>%
-      
-      addLegend(
-        "bottomright",
-        pal = pal,
-        values = county_data$estimate,
-        title = "Population Estimate",
-        opacity = 0.7,
-        labFormat = labelFormat(suffix = "")
       ) %>%
       
       addLayersControl(
-        overlayGroups = c("Heatmap", "Facilities", "Population Estimate"),
+        overlayGroups = c("Heatmap", "Facilities"),
+        baseGroups = ("Population Estimate"),
         options = layersControlOptions(collapsed = FALSE)
       ) %>% 
       
       setView(
         lng = mean(data$longitude, na.rm = TRUE), 
         lat = mean(data$latitude, na.rm = TRUE), 
-        zoom = 4
+        zoom = 3
       )
   })
 }
+
 app.R <- shinyApp(ui = ui, server = server)
 app.R
-
 ```
 
 
