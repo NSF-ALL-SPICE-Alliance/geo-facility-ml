@@ -433,14 +433,13 @@ class(county_data)
 ```
 
 ```{r}
-
 ui <- fluidPage(
   tags$style(HTML("
     body {
       background-color: #AAD3DF; /* Background color of the entire app */
     }
     .selectize-input, .selectize-dropdown-content {
-      background-color: #8cb4f5; /* Dropdown background color */
+      background-color: #AAD3DF; /* Dropdown background color */
       color: #333333; /* Dropdown text color */
     }
        h2 {  /* Style for title text */
@@ -464,7 +463,7 @@ ui <- fluidPage(
   ")),
 
   # Application title
-  titlePanel("US Mental Health Facilities"),
+  titlePanel("Mental Health Facilities & Services - United States"),
   
   # Sidebar layout with input and output definitions
   sidebarLayout(
@@ -486,14 +485,16 @@ ui <- fluidPage(
     
     # Main panel for displaying outputs
     mainPanel(
-      img()
       
       # Leaflet map output
       leafletOutput("map", width = "100%", height = "600px")
     )
   )
 )
+```
 
+
+```{r}
 server <- function(input, output, session) {
   
   observeEvent(input$overall_category, {
@@ -532,7 +533,7 @@ server <- function(input, output, session) {
       
        addPolygons(
         data = county_data,
-        color = "00FFFFFF", # Outline color for counties
+        color = "#000000", # Outline color for counties
         weight = 1,
         fillColor = ~pal(estimate),
         fillOpacity = 0.7,
