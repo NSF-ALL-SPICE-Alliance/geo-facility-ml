@@ -1,0 +1,798 @@
+---
+title: "Filter Map"
+author: "Connor Flynn"
+date: "5/20/2024"
+output: html_document
+---
+
+## FOR CONNOR ##
+Would love to figure out how to embed cifal_logo.png in the bottom left of mainPanel.
+I was able to do it for USARPAC because we hosted on Github pages, and I just put the image on
+there.. anything you can think to try would be helpful
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readxl)
+library(here)
+library(tidygeocoder)
+library(mapview)
+library(shiny)
+library(leaflet)
+library(dplyr)
+library(data.table)
+library(leaflet.extras)
+library(sf)
+library(sp)
+library(raster)
+library(shinylive)
+library(tidycensus)
+```
+
+Read in Data *SA not MH
+```{r}
+facilities <- read_excel(here("National_Directory_SA_Facilities_2022.xlsx"))
+```
+
+Merge Columns
+```{r}
+facilities <- facilities %>%
+  unite(whole_adress, c("street1", "city", "state", "zip"), sep = " ")
+```
+
+Geocode facilities (Takes 2.5 hours to run)
+```{r}
+facilities <- facilities %>%
+geocode(whole_adress, method = 'osm', lat = latitude , long = longitude)
+```
+
+Save geocoded facilities file
+```{r}
+write_csv(facilities, here("geocoded_facilities.csv"))
+```
+
+Read in geocoded facilities file
+```{r}
+geocoded_facilities <- read_csv(here("geocoded_facilities.csv"))
+```
+
+```{r}
+geocoded_facilities_filtered <- geocoded_facilities %>% 
+  drop_na(longitude, latitude)
+```
+
+```{r}
+geocoded_facilities_filtered <- geocoded_facilities_filtered %>% 
+  dplyr::select(name1, service_code_info, latitude, longitude)
+```
+
+```{r}
+# Define categories and corresponding abbreviations
+abbrev_dict <- list(
+  "Type of Care" = c("Substance use treatment",
+                     
+                     "Detoxification",
+                     
+                     "Transitional housing, halfway house, or sober home",
+                     
+                     "Treatment for co-ocurring substance use plus either serious mental health illness in adults/serious emotional disturbance in children"),
+  
+  
+  "Service Setting (e.g., Outpatient, Residential, Inpatient, etc.)" = c("Hospital inpatient/24-hour hospital inpatient",
+                                                                         "Outpatient",
+                                                                         "Residential/24-hour residential",
+                                                                         "Hospital inpatient detoxification",
+                                                                         "Hospital inpatient treatment",
+                                                                         "Outpatient detoxification",
+                                                                         "Outpatient day treatment or partial hospitalization",
+                                                                         "Intensive outpatient treatment",
+                                                                         "Outpatient methadone/buprenorphine or
+naltrexone treatment",
+
+    "Regular outpatient treatment",
+
+    "Residential detoxification",
+
+    "Long-term residential",
+
+    "Short-term residential"),
+
+
+    "Hospitals" = c("General Hospital (including VA hospital)",
+                    "Psychiatric hospital"
+                    ),
+
+    "Opioid Medications used in Treatment" = c("Methadone used in Treatment",
+                                               "Buprenorphine used in Treatment",
+                                               "Naltrexone used in Treatment"),
+
+
+    "External Opioid Medications Source" = c("In-network prescribing entity",
+                                             "Other contracted prescribing entity",
+                                             "No formal relationship with prescribing entity"),
+
+  
+    "Type of Alcohol Use Disorder Treatment" = c("Does not treat alcohol use disorder",
+                                                 "Does not use medication assisted treatment for alcohol use disorder",
+                                                 "Accepts clients using medication assisted treatment for alcohol use disorder but prescribed elsewhere",
+                                                 "This facility administers/prescribes medication for alcohol use disorder"),
+
+
+    "External Source of Medications Used for Alcohol Use Disorder Treatment" = c("In-network prescribing entity",
+                                                                                 "Other contracted prescribing entity",
+                                                                                 "No formal relationship with prescribing entity"),
+
+
+    "Type of Opioid Treatment" = c("Buprenorphine detoxification",
+                                   "Buprenorphine maintenance",
+                                   "Buprenorphine maintenance for predetermined time",
+                                   "Federally-certified Opioid Treatment Program",
+                                   "Methadone detoxification",
+                                   "Methadone maintenance",
+                                   "Methadone maintenance for predetermined time",
+                                   "Prescribes buprenorphine",
+                                   "Prescribes naltrexone",
+                                   "Relapse prevention with naltrexone",
+                                   "Use methadone/buprenorphine for pain management or emergency dosing",
+                                   "Accepts clients using MAT but prescribed elsewhere",
+                                   "Does not use MAT for opioid use disorders",
+                                   "Lofexidine/clonidine detoxification",
+                                   "Does not treat opioid use disorders"),
+
+
+    "Pharmacotherapies" = c("Acamprosate (Campral®)",
+                            "Disulfiram",
+                            "Methadone",
+                            "Buprenorphine sub-dermal implant",
+                            "Buprenorphine with naloxone",
+                            "Buprenorphine without naloxone",
+                            "Buprenorphine (extended-release, injectable)",
+                            "Naltrexone (oral)",
+                            "Naltrexone (extended-release, injectable)",
+                            "Medications for HIV treatment",
+                            "Medications for Hepatitis C treatment",
+                            "Lofexidine",
+                            "Clonidine",
+                            "Medication for mental disorders",
+                            "Medications for pre-exposure to prophylaxis",
+                            "Nicotine replacement",
+                            "Non-nicotine smoking/tobacco cessation"
+                            ),
+
+
+    "Treatment Approaches" = c("Anger management",
+                               "Brief intervention",
+                               "Cognitive behavioral therapy",
+                               "Contingency management/motivational incentives",
+                               "Community reinforcement plus vouchers",
+                               "Motivational interviewing",
+                               "Matrix Model",
+                               "Relapse prevention",
+                               "Substance use disorder counseling",
+                               "Telemedicine/telehealth therapy",
+                               "Trauma-related counseling",
+                               "12-step facilitation"
+                               ),
+
+
+    "Facility Operation (e.g., Private, Public)" = c("Local, county, or community government",
+                                                     "Department of Defense",
+                                                     "Indian Health Services",
+                                                     "Private for-profit organization",
+                                                     "Private non-profit organization",
+                                                     "State government",
+                                                     "Tribal government",
+                                                     "U.S. Department of Veterans Affairs",
+                                                     "Federal Government"),
+
+
+    "License/Certification/Accreditation" = c("State Substance use treatment agency",
+                                              "State mental health department",
+                                              "State department of health",
+                                              "Commission on Accreditation of Rehabilitation Facilities (CARF)",
+                                              "Council on Accreditation (COA)",
+                                              "Healthcare Facilities Accreditation Program (HFAP)",
+                                              "Hospital licensing authority",
+                                              "The Joint Commission",
+                                              "National Committee for Quality Assurance (NCQA)",
+                                              "Federally Qualified Health Center",
+                                              "SAMHSA certification for opioid treatment program (OTP)",
+                                              "Drug Enforcement Agency (DEA)"),
+
+
+    "Payment/Insurance/Funding Accepted" = c("Federal, or any government funding for substance use treatment programs",
+                                             "IHS/Tribal/Urban (ITU) funds",
+                                             "Medicare",
+                                             "Medicaid",
+                                             "Federal military insurance (e.g., TRICARE)",
+                                             "No payment accepted",
+                                             "Private health insurance",
+                                             "Cash or self-payment",
+                                             "State-financed health insurance plan other than Medicaid",
+                                             "SAMHSA funding/block grants"),
+
+
+    "Payment Assistance Available" = c("Payment assistance (check with facility for details)",
+                                       "Sliding fee scale (fee is based on income and other factors)"),
+
+
+    "Special Programs/Groups Offered" = c("Adolescents",
+                                          "Young adults",
+                                          "Adult women",
+                                          "Pregnant/postpartum women",
+                                          "Adult men",
+                                          "Seniors or older adults",
+                                          "Lesbian, gay, bisexual, transgender, or queer/questioning (LGBTQ)",
+                                          "Veterans",
+                                          "Active duty military",
+                                          "Members of military families",
+                                          "Criminal justice (other than DUI/DWI)/Forensic clients",
+                                          "Clients with co-occurring mental and substance use disorders",
+                                          "Clients with co-occurring pain and substance use disorders",
+                                          "Clients with HIV or AIDS",
+                                          "Clients who have experienced sexual abuse",
+                                          "Clients who have experienced intimate partner violence, domestic violence",
+                                          "Clients who have experienced trauma"),
+
+
+    "Assessment/Pre-treatment" = c("Comprehensive mental health assessment",
+                                   "Comprehensive substance use assessment",
+                                   "Interim services for clients",
+                                   "Outreach to persons in the community",
+                                   "Complete medical history/physical exam",
+                                   "Screening for tobacco use",
+                                   "Screening for substance use",
+                                   "Screening for mental disorders",
+                                   "Professional interventionist/educational consultant"),
+
+
+    "Testing" = c("Breathalyzer or blood alcohol testing",
+                  "Drug and alcohol oral fluid testing",
+                  "Drug or alcohol urine screening",
+                  "HIV testing",
+                  "STD testing",
+                  "TB screening",
+                  "Metabolic syndrome monitoring",
+                  "Testing for Hepatitis B (HBV)",
+                  "Testing for Hepatitis C (HCV)"),
+
+
+    "Transitional Services" = c("Aftercare/continuing care",
+                                "Discharge Planning",
+                                "Naloxone and overdose education",
+                                "Outcome follow-up after discharge"),
+
+
+    "Recovery Support Services" = c("Self-help groups",
+                                    "Housing services",
+                                    "Assistance with obtaining social services",
+                                    "Recovery coach",
+                                    "Mentoring/peer support",
+                                    "Employment counseling or training"),
+
+
+    "Other Services" = c("Treatment for gambling disorder",
+                         "Treatment for other addiction disorder"),
+
+
+    "Detoxification (medical withdrawal) Services" = c("Alcohol Detoxification",
+                                                       "Benzodiazepines Detoxification",
+                                                       "Cocaine Detoxification",
+                                                       "Methamphetamines detoxification",
+                                                       "Opioids detoxification",
+                                                       "Medication routinely used during detoxification"),
+
+
+    "Education and Counseling Services" = c("HIV or AIDS education, counseling, or support",
+                                            "Hepatitis education, counseling, or support",
+                                            "Health education services other than HIV/AIDS or hepatitis",
+                                            "Substance use disorder education",
+                                            "Smoking/vaping/tobacco cessation counseling",
+                                            "Individual counseling",
+                                            "Group counseling",
+                                            "Family counseling",
+                                            "Marital/couples counseling",
+                                            "Vocational training or educational support (for example, high school coursework, GED preparation, etc.)"),
+
+
+    "Medical Services" = c("Hepatitis A (HAV) vaccination",
+                           "Hepatitis B (HBV) vaccination"),
+
+
+    "Facility Smoking Policy" = c("Smoking not permitted",
+                                  "Smoking permitted without restriction",
+                                  "Smoking permitted in designated area"),
+
+
+    "Age Groups Accepted" = c("Adults",
+                              "Children/Adolescents",
+                              "Seniors",
+                              "Young adults"),
+
+
+    "Gender Accepted" = c("Female",
+                          "Male"),
+
+
+    "Exclusive Services" = c("Specially designed program for DUI/DWI clients",
+                             "Serves only DUI/DWI clients",
+                             "Alcohol use disorder clients only",
+                             "Opioid use disorder clients only"),
+
+
+    "Language Services" = c("Spanish",
+                            "Sign language services for the deaf and hard of hearing",
+                            "American Indian or Alaska Native languages",
+                            "Other languages (excluding Spanish)"),
+
+
+    "Facility Vaping Policy" = c("Vaping not permitted",
+                                 "Vaping permitted without restriction",
+                                 "Vaping permitted in a designated area"),
+
+
+    "Ancillary Services" = c("Acupuncture",
+                             "Residential beds for clients' children",
+                             "Case management service",
+                             "Child care for clients' children",
+                             "Domestic violence services, including family or partner",
+                             "Early intervention for HIV",
+                             "Mental health services",
+                             "Social skills development",
+                             "Transportation assistance",
+                             "Integrated primary care services",
+                             "Suicide prevention services")
+)
+```
+
+```{r}
+full_definitions<-c(
+  "SA" = "Substance use treatment",
+  "DT" = "Detoxification",
+  "HH" = "Transitional housing, halfway house, or sober home",
+  "SUMH" = "Treatment for co-ocurring substance use plus either serious mental health illness in adults/serious emotional disturbance in children",
+  "HI" = "Hospital inpatient/24-hour hospital inpatient",
+  "OP" = "Outpatient",
+  "RES" = "Residential/24-hour residential",                           "HID" = "Hospital inpatient detoxification",
+  "HIT" = "Hospital inpatient treatment",
+                                                                       "OD" = "Outpatient detoxification",
+                                                                       "ODT" = "Outpatient day treatment or partial hospitalization",
+                                                                       "OIT" = "Intensive outpatient treatment",
+                                                                         "OMB" = "Outpatient methadone/buprenorphine or
+naltrexone treatment",
+
+    "ORT" = "Regular outpatient treatment",
+
+    "RD" = "Residential detoxification",
+
+    "RL" = "Long-term residential",
+
+   "RS" = "Short-term residential",
+
+
+   "GH" = "General Hospital (including VA hospital)",
+    "PSYH" = "Psychiatric hospital",
+
+
+   "MU" = "Methadone used in Treatment",
+  "BU" = "Buprenorphine used in Treatment",
+  "NU" = "Naltrexone used in Treatment",
+
+
+    "INPE" = "In-network prescribing entity",
+     "RPE" = "Other contracted prescribing entity",
+    "PC" = "No formal relationship with prescribing entity",
+
+  
+  "NAUT" = "Does not treat alcohol use disorder",
+   "NMAUT" = "Does not use medication assisted treatment for alcohol use disorder",
+    "ACMA" = "Accepts clients using medication assisted treatment for alcohol use disorder but prescribed elsewhere",
+   "PMAT" =  "This facility administers/prescribes medication for alcohol use disorder",
+
+  "AUINPE" = "In-network prescribing entity",
+                                                                        "AURPE" = "Other contracted prescribing entity",
+                                                                        "AUPC" = "No formal relationship with prescribing entity",
+
+
+   "DB" = "Buprenorphine detoxification",
+   "BUM" = "Buprenorphine maintenance",
+   "BMW" =  "Buprenorphine maintenance for predetermined time",
+   "OTP" = "Federally-certified Opioid Treatment Program",
+   "DM" = "Methadone detoxification",
+   "MM" = "Methadone maintenance",
+   "MMW" = "Methadone maintenance for predetermined time",
+    "UB" = "Prescribes buprenorphine",
+    "UN" = "Prescribes naltrexone",
+    "RPN"= "Relapse prevention with naltrexone",
+    "PAIN" = "Use methadone/buprenorphine for pain management or emergency dosing",
+    "MOA" = "Accepts clients using MAT but prescribed elsewhere",
+   "NMOA" = "Does not use MAT for opioid use disorders",
+   "ULC" = "Lofexidine/clonidine detoxification",
+   "NOOP" = "Does not treat opioid use disorders",
+
+
+    "ACM" = "Acamprosate (Campral®)",
+    "DSF" = "Disulfiram",
+     "METH" = "Methadone",
+     "BSDM" = "Buprenorphine sub-dermal implant",
+     "BWN" = "Buprenorphine with naloxone",
+     "BWON" = "Buprenorphine without naloxone",
+     "BERI" = "Buprenorphine (extended-release, injectable)",
+    "NXN" = "Naltrexone (oral)",
+  "VTRL" = "Naltrexone (extended-release, injectable)",
+    "MHIV" = "Medications for HIV treatment",
+    "MHCV" = "Medications for Hepatitis C treatment",
+    "LFXD" = "Lofexidine",
+  "CLND" = "Clonidine",
+   "MMD" = "Medication for mental disorders",
+   "MPEP" = "Medications for pre-exposure to prophylaxis",
+   "NRT" = "Nicotine replacement",
+   "NSC" =  "Non-nicotine smoking/tobacco cessation",
+
+    "ANG" = "Anger management",
+    "BIA" = "Brief intervention",
+    "CBT" = "Cognitive behavioral therapy",
+    "CMI" = "Contingency management/motivational incentives",
+    "CRV" =  "Community reinforcement plus vouchers",
+    "MOTI" = "Motivational interviewing",
+    "MXM" = "Matrix Model",
+     "RELP" = "Relapse prevention",
+    "SACA" = "Substance use disorder counseling",
+     "TELE" = "Telemedicine/telehealth therapy",
+    "TRC" = "Trauma-related counseling",
+     "TWFA" = "12-step facilitation",
+      "LCCG" = "Local, county, or community government",
+     "DDF" = "Department of Defense",
+     "IH" = "Indian Health Services",
+    "PVTP" = "Private for-profit organization",
+    "PVTN" = "Private non-profit organization",
+    "STG" = "State government",
+    "TBG" = "Tribal government",
+     "VAMC" = "U.S. Department of Veterans Affairs",
+    "FED" = "Federal Government",
+    "STAG" = "State Substance use treatment agency",
+    "STMH"= "State mental health department",
+    "STDH" = "State department of health",
+     "CARF" = "Commission on Accreditation of Rehabilitation Facilities (CARF)",
+    "COA" = "Council on Accreditation (COA)",
+  "HFAP" = "Healthcare Facilities Accreditation Program (HFAP)",
+   "HLA" = "Hospital licensing authority",
+   "JC" = "The Joint Commission",
+  "NCQA" = "National Committee for Quality Assurance (NCQA)",
+  "FQHC" = "Federally Qualified Health Center",
+   "SOTP" = "SAMHSA certification for opioid treatment program (OTP)",
+  "DEA" = "Drug Enforcement Agency (DEA)",
+    "FSA" = "Federal, or any government funding for substance use treatment programs",
+    "ITU" = "IHS/Tribal/Urban (ITU) funds",
+    "MC" = "Medicare",
+   "MD" =  "Medicaid",
+   "MI" = "Federal military insurance (e.g., TRICARE)",
+   "NP" = "No payment accepted",
+  "PI" = "Private health insurance",
+   "SF" = "Cash or self-payment",
+   "SI" = "State-financed health insurance plan other than Medicaid",
+    "SAMFA" = "SAMHSA funding/block grants",
+"PA" = "Payment assistance (check with facility for details)",
+  "SS" = "Sliding fee scale (fee is based on income and other factors)",
+    "AD" = "Adolescents",
+    "TAY" = "Young adults",
+   "WN" =  "Adult women",
+    "PW" = "Pregnant/postpartum women",
+   "MN" = "Adult men",
+   "SE" = "Seniors or older adults",
+    "GL" = "Lesbian, gay, bisexual, transgender, or queer/questioning (LGBTQ)",
+  "VET" = "Veterans",
+  "ADM" = "Active duty military",
+  "MF" = "Members of military families",
+   "CJ" = "Criminal justice (other than DUI/DWI)/Forensic clients",
+  "CO" = "Clients with co-occurring mental and substance use disorders",
+    "COPSU" = "Clients with co-occurring pain and substance use disorders",
+  "HV" = "Clients with HIV or AIDS",
+   "XA" = "Clients who have experienced sexual abuse",
+  "DV" = "Clients who have experienced intimate partner violence, domestic violence",
+   "TRMA" =  "Clients who have experienced trauma",
+  "CMHA" = "Comprehensive mental health assessment",
+   "CSAA" = "Comprehensive substance use assessment",
+  "ISC" = "Interim services for clients",
+    "OPC" ="Outreach to persons in the community",
+   "MHPA" = "Complete medical history/physical exam",
+   "STU" = "Screening for tobacco use",
+   "SSA" = "Screening for substance use",
+    "SMHD" = "Screening for mental disorders",
+   "PIEC" = "Professional interventionist/educational consultant",
+    "BABA" = "Breathalyzer or blood alcohol testing",
+    "DAOF" = "Drug and alcohol oral fluid testing",
+    "DAUT" = "Drug or alcohol urine screening",
+    "HIVT" = "HIV testing",
+   "STDT" = "STD testing",
+    "TBS" = "TB screening",
+   "MST" = "Metabolic syndrome monitoring",
+   "HBT" = "Testing for Hepatitis B (HBV)",
+  "HCT" = "Testing for Hepatitis C (HCV)",
+    "ACC" = "Aftercare/continuing care",
+   "DP" = "Discharge Planning",
+   "NOE" = "Naloxone and overdose education",
+    "OFD" = "Outcome follow-up after discharge",
+    "SHG" = "Self-help groups",
+    "HS" = "Housing services",
+   "AOSS" = "Assistance with obtaining social services",
+     "RC" = "Recovery coach",
+     "PEER" = "Mentoring/peer support",
+     "EMP" = "Employment counseling or training",
+  "TGD" = "Treatment for gambling disorder",
+    "TOD" = "Treatment for other addiction disorder",
+   "ADTX" = "Alcohol Detoxification",                                   "BDTX" = "Benzodiazepines Detoxification",
+   "CDTX" = "Cocaine Detoxification",
+   "MDTX" = "Methamphetamines detoxification",
+   "ODTX" = "Opioids detoxification",
+    "MDET" = "Medication routinely used during detoxification",
+    "HAEC" = "HIV or AIDS education, counseling, or support",
+    "TAEC" = "Hepatitis education, counseling, or support",
+    "HEOH" = "Health education services other than HIV/AIDS or hepatitis",
+    "SAE" ="Substance use disorder education",
+    "TCC" = "Smoking/vaping/tobacco cessation counseling",
+    "ICO" = "Individual counseling",
+   "GCO" = "Group counseling",
+    "FCO" = "Family counseling",
+   "MCO" = "Marital/couples counseling",
+   "VOC" = "Vocational training or educational support (for example, high school coursework, GED preparation, etc.)",
+"HAV" = "Hepatitis A (HAV) vaccination",
+ "HBV" = "Hepatitis B (HBV) vaccination",
+ "SMON" = "Smoking not permitted",
+   "SMOP" = "Smoking permitted without restriction",
+   "SMPD" = "Smoking permitted in designated area",
+   "ADLT" = "Adults",
+  "CHLD" =  "Children/Adolescents",
+  "SNR" = "Seniors",
+   "YAD" = "Young adults",
+  "FEM" = "Female",
+   "MALE" = "Male",
+"DU" = "Specially designed program for DUI/DWI clients",
+ "DUO" = "Serves only DUI/DWI clients",
+  "AUDO" = "Alcohol use disorder clients only",
+  "OUDO" = "Opioid use disorder clients only",
+  "SP" ="Spanish",
+   "AH" = "Sign language services for the deaf and hard of hearing",
+   "NX" = "American Indian or Alaska Native languages",
+   "FX" = "Other languages (excluding Spanish)",
+    "VAPN" = "Vaping not permitted",
+   "VAPP" = "Vaping permitted without restriction",
+    "VPPD" = "Vaping permitted in a designated area",
+    "ACU" = "Acupuncture",
+    "BC" = "Residential beds for clients' children",
+    "CM" = "Case management service",
+    "CCC" = "Child care for clients' children",
+     "DVFP" = "Domestic violence services, including family or partner",
+  "EIH" = "Early intervention for HIV",
+  "MHS" = "Mental health services",
+   "SSD" = "Social skills development",
+  "TA" = "Transportation assistance",
+  "IPC" = "Integrated primary care services",
+  "SPS" = "Suicide prevention services")
+
+```
+
+```{r}
+geocoded_facilities_filtered <- as.data.table(geocoded_facilities_filtered)
+```
+
+```{r}
+setDT(geocoded_facilities_filtered)
+replace_with_definitions <- function(text, dictionary) {
+  sapply(strsplit(text, " * "), function(abbrev_list) {
+    paste(unlist(dictionary[abbrev_list]), collapse = " * ")
+  })
+}
+# Update service_code_info column with definitions
+geocoded_facilities_filtered[, service_code_info := replace_with_definitions(service_code_info, full_definitions)]
+```
+
+DATA manip
+```{r}
+geocoded_facilities_filtered %>% 
+  filter(!is.na(service_code_info))
+facilities_long <- geocoded_facilities_filtered %>%
+  separate_rows(service_code_info, sep = " \\* ") %>%
+  rename(service = service_code_info)
+```
+
+counties
+```{r}
+## download county data from tidycensus
+# st_transform to match coordinate systems
+library(rmapshaper)
+county_data <- get_acs(
+  geography = "county", 
+  variables = "B01003_001",  # Total population variable
+  year = 2020, 
+  geometry = TRUE
+)
+
+
+# Step 6: Transform data for leaflet (project spatial data)
+county_data <- st_transform(county_data, crs = 4326)  # Ensure data is in the ST format
+
+county_data <- ms_simplify(county_data) #speeds county render up marginally
+class(county_data)
+
+```
+
+```{r}
+ui <- fluidPage(
+  tags$style(HTML("
+    body {
+      background-color: #000000; /* Background color of the entire app */
+    }
+    .selectize-input {
+        color: #000000 !important;
+      }
+
+      /* Text color and background color when selecting options */
+      .selectize-dropdown-content {
+        background-color: #000000 !important;
+      }
+
+      .selectize-dropdown-content .option {
+        color: white !important;
+      }
+
+      /* Highlight selected option */
+      .selectize-dropdown-content .option:hover {
+        background-color: white !important;
+        color: black !important;
+    }
+       h2 {  /* Style for title text */
+      font-family: 'Sans-serif', arial; /* Change font family */
+      font-size: 35px; /* Font size */
+      font-weight: bold;
+      padding-bottom: 30px;
+      color: #FFFFFF; /* Text color */
+      background-color: #000000;
+      text-align: center;
+      padding: 15px;
+      border: 1px solid #FFFFFF;
+      border-radius: 10px;
+      display: inline-block;
+       }
+    .sidebarPanel {
+    border: 1px solid #000000;
+    border-radius: 4px;
+    }
+  ")),
+
+  # Application title
+  titlePanel("Mental Health Facilities & Services - United States"),
+  
+  # Sidebar layout with input and output definitions
+  sidebarLayout(
+    sidebarPanel(
+      
+      # Select overall category
+      selectInput("overall_category", "Select Category:",
+                  choices = names(abbrev_dict)),
+      
+      # Select service
+      selectInput("service", "Select Service:", choices = NULL),
+    
+    
+    h4("Controls"),
+    p("Click and drag to navigate the map. Scroll or use the '+/-' to zoom in and out."),
+    p("Use the first dropdown to select a category of services. Use the second dropdown to select a service from within that category."),
+    p("Uncheck 'Facilities' in the top right to hide points."),
+    p(strong("Clicking on either a county or a facility will reveal additional details."))),
+    
+    # Main panel for displaying outputs
+    mainPanel(
+      
+      # Leaflet map output
+      leafletOutput("map", width = "100%", height = "600px")
+    )
+  )
+)
+```
+
+```{r}
+server <- function(input, output, session) {
+  
+  observeEvent(input$overall_category, {
+    choices <- abbrev_dict[[input$overall_category]]
+    updateSelectInput(session, "service", choices = choices)
+  })
+  
+  # Reactive expression for filtered data
+  filtered_data <- reactive({
+    req(input$overall_category, input$service)
+    facilities_long %>% filter(service == input$service)
+  })
+  
+  # Define breaks for binned population and create color palette
+  bins <- c(0, 5000, 10000, 50000, 100000, 500000, 1000000, Inf)
+  pal <- colorBin("YlGnBu", domain = county_data$estimate, bins = bins)
+  
+  # Output to render leaflet map
+  output$map <- renderLeaflet({
+    
+    leaflet(options = leafletOptions(minZoom = 3)) %>%
+      
+      ## polygons & legend in 'render leaflet' section improves load. everything in here is updated once at ## startup, everything in 'observe' is updated every time we select a new dropdown option
+      
+      addTiles() %>%
+      
+      addLegend(
+        "bottomright",
+        pal = pal,
+        values = county_data$estimate,
+        title = "Population Estimate",
+        opacity = 0.7,
+        labFormat = labelFormat(suffix = ""),
+        group = "Population Estimate"
+        
+      ) %>%
+      
+       addPolygons(
+        data = county_data,
+        color = "#000000", # Outline color for counties
+        weight = 1,
+        fillColor = ~pal(estimate),
+        fillOpacity = 0.7,
+        popup = ~paste0(NAME, "<br>Population: ", ... = estimate)
+
+      ) %>%
+      
+       # Set initial view to       USA 
+      setView(lng = -95.7129, lat = 37.0902, zoom = 4) %>% 
+    
+      setMaxBounds(lng1 = -188.29
+                , lat1 = 5.40
+                , lng2 = -49.49
+                , lat2 = 101.30 )
+ })
+  
+  # Observer updates markers and polygons every selection
+  observe({
+    data <- filtered_data()
+    
+    leafletProxy("map", data = data) %>%
+      clearMarkers() %>%
+      clearGroup("Heatmap") %>% 
+      
+      # addHeatmap(
+      #   data = data,
+      #   lng = ~longitude, 
+      #   lat = ~latitude,
+      #   intensity = rep(1, nrow(facilities_long)), 
+      #   blur = 16, max = 0.1, radius = 10,
+      #   group = "Heatmap"
+        
+      #) %>%
+      
+      addCircleMarkers(
+      data = data,
+      lng = ~longitude,
+      lat = ~latitude,
+      popup = ~paste0(name1),
+      radius = 3,
+      color = "blue",
+      group = "Facilities"
+      
+      ) %>%
+      
+      addLayersControl(              # ,"Heatmap"
+        overlayGroups = c("Facilities"),
+        options = layersControlOptions(collapsed = FALSE)
+        
+      ) %>% 
+      
+     # hideGroup("Heatmap") %>% 
+      
+      setView(
+        lng = mean(data$longitude, na.rm = TRUE), 
+        lat = mean(data$latitude, na.rm = TRUE), 
+        zoom = 3
+      )
+  })
+}
+
+app.R <- shinyApp(ui = ui, server = server)
+app.R
+```
